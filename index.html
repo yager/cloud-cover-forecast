@@ -87,7 +87,7 @@
         }
         
         .time-select {
-            width: 200px;
+            width: 220px;
             padding: 8px 12px;
             font-size: 14px;
             border: 1px solid #ccc;
@@ -126,7 +126,7 @@
         
         .map {
             width: 320px;
-            height: 280px;
+            height: 220px;
         }
         
         
@@ -191,7 +191,7 @@
         // マップを初期化する関数
         function initMaps() {
             // 3つのマップを初期化
-            const initialCenter = [36.004673, 139.669189];
+            const initialCenter = [35.710838, 139.471436];
             const initialZoom = 7;
             
             maps.lower = L.map('map-lower', {
@@ -439,7 +439,7 @@
                 const response = await fetch(url);
                 const data = await response.json();
                 
-                console.log(`Loaded data for ${type}:`, data);
+                //console.log(`Loaded data for ${type}:`, data);
                 
                 // データを保存
                 layerData[type] = data;
@@ -480,9 +480,21 @@
                     select.appendChild(option);
                 });
                 
-                // 最初の時刻を選択（最古）
+                // 現在時刻の次にくる時間を選択
                 if (tileKeys.length > 0) {
-                    select.value = tileKeys[0];
+                    const now = new Date();
+                    // 現在時刻より後の時刻を探す
+                    const nextTime = tileKeys.find(utcKey => {
+                        const time = new Date(utcKey);
+                        return time > now;
+                    });
+                    
+                    // 現在時刻より後の時刻があればそれを選択、なければ最初の時刻を選択
+                    if (nextTime) {
+                        select.value = nextTime;
+                    } else {
+                        select.value = tileKeys[0];
+                    }
                 }
             }
             
@@ -521,7 +533,7 @@
                 // 相対パスを絶対URLに変換
                 const tileUrl = `https://wxtech-tile.wni.co.jp${tilePath}`;
                 
-                console.log(`Creating layer for ${type}:`, tileUrl);
+                //console.log(`Creating layer for ${type}:`, tileUrl);
                 
                 // 既存のレイヤーを削除
                 if (cloudLayers[type]) {
@@ -541,19 +553,19 @@
                     const layer = L.tileLayer(tileUrl, layerOptions);
                     
                     // タイル読み込み成功時のURL表示
-                    layer.on('tileload', function(event) {
-                        console.log(`Tile loaded for ${type}:`, event.tile.src);
-                    });
+                    //layer.on('tileload', function(event) {
+                    //    console.log(`Tile loaded for ${type}:`, event.tile.src);
+                    //});
                     
                     // タイル読み込みエラーのハンドリング
-                    layer.on('tileerror', function(error, tile) {
-                        console.error(`Tile error for ${type}:`, error, tile);
-                    });
+                    //layer.on('tileerror', function(error, tile) {
+                    //    console.error(`Tile error for ${type}:`, error, tile);
+                    //});
                     
                     cloudLayers[type] = layer;
                     layer.addTo(maps[type]);
                     
-                    console.log(`Layer added for ${type} at ${selectedUtcTime}`);
+                    //console.log(`Layer added for ${type} at ${selectedUtcTime}`);
                 } catch (error) {
                     console.error(`Failed to create layer for ${type}:`, error);
                 }
@@ -572,8 +584,8 @@
                 loadCloudLayerData('upper')
             ]);
             
-            console.log('Loaded data:', results);
-            console.log('Layer data:', layerData);
+            //console.log('Loaded data:', results);
+            //console.log('Layer data:', layerData);
             
             // 下層のデータから日時プルダウンを作成
             if (layerData.lower) {
