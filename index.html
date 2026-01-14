@@ -31,9 +31,8 @@
         }
         
         .control-panel {
-            padding: 15px;
+            padding: 10px;
             background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             z-index: 1000;
             width: 320px;
             max-width: 100%;
@@ -135,9 +134,10 @@
         
         .map {
             width: 320px;
-            height: 210px;
+            height: 200px;
         }
         .map-attribution {
+            margin-top: 15px;
             text-align: right;
             font-size: 12px;
             color: #666;
@@ -155,10 +155,16 @@
             padding: 5px 10px;
             border-radius: 4px;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 12px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            text-align: right;
+            color: #666;
         }
-    </style>
+        .leaflet-control-map-label small {
+            display: block;
+            font-size: 10px;
+        }
+        </style>
 </head>
 <body>
     <div class="control-panel">
@@ -205,11 +211,43 @@
             upper: null
         };
         
+        // URLパラメータを読み取る関数
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const lat = params.get('lat');
+            const lng = params.get('lng');
+            const z = params.get('z');
+            
+            return {
+                lat: lat ? parseFloat(lat) : null,
+                lng: lng ? parseFloat(lng) : null,
+                z: z ? parseInt(z) : null
+            };
+        }
+        
+        // URLを更新する関数
+        function updateUrl(center, zoom) {
+            const params = new URLSearchParams();
+            params.set('lat', center.lat.toFixed(6));
+            params.set('lng', center.lng.toFixed(6));
+            params.set('z', zoom.toString());
+            
+            const newUrl = window.location.pathname + '?' + params.toString();
+            history.replaceState(null, '', newUrl);
+        }
+        
         // マップを初期化する関数
         function initMaps() {
-            // 3つのマップを初期化
-            const initialCenter = [35.782171, 139.471436];
-            const initialZoom = 7;
+            // URLパラメータから初期値を取得
+            const urlParams = getUrlParams();
+            const defaultCenter = [35.782171, 139.471436];
+            const defaultZoom = 7;
+            
+            const initialCenter = [
+                urlParams.lat !== null ? urlParams.lat : defaultCenter[0],
+                urlParams.lng !== null ? urlParams.lng : defaultCenter[1]
+            ];
+            const initialZoom = urlParams.z !== null ? urlParams.z : defaultZoom;
             
             maps.lower = L.map('map-lower', {
                 center: initialCenter,
@@ -263,7 +301,7 @@
             const labelUpper = L.control({position: 'topright'});
             labelUpper.onAdd = function() {
                 const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '上層';
+                div.innerHTML = '上層<small>5500m付近〜</small>';
                 return div;
             };
             labelUpper.addTo(maps.upper);
@@ -271,7 +309,7 @@
             const labelMiddle = L.control({position: 'topright'});
             labelMiddle.onAdd = function() {
                 const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '中層';
+                div.innerHTML = '中層<small>1500〜5500m付近</small>';
                 return div;
             };
             labelMiddle.addTo(maps.middle);
@@ -279,7 +317,7 @@
             const labelLower = L.control({position: 'topright'});
             labelLower.onAdd = function() {
                 const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '下層';
+                div.innerHTML = '下層<small>〜1500m付近</small>';
                 return div;
             };
             labelLower.addTo(maps.lower);
@@ -304,6 +342,9 @@
                 // 他の2つのマップを同期
                 targetMap1.setView(center, zoom);
                 targetMap2.setView(center, zoom);
+                
+                // URLを更新
+                updateUrl(center, zoom);
                 
                 // デバッグ情報を表示
                 console.log(`[地図同期] ズームレベル: ${zoom}, 中心座標: [${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}]`);
