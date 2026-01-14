@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雲量予報 - Cloud Cover Forecast</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 320px;
+        }
+        
+        .control-panel {
+            padding: 15px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            width: 320px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .control-panel h1 {
+            margin-bottom: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+        }
+        
+        .time-select-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .time-select-btn {
+            width: 30px;
+            height: 38px;
+            padding: 0;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .time-select-btn:hover {
+            background: #f0f0f0;
+        }
+        
+        .time-select-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .time-select {
+            width: 200px;
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .maps-container {
+            display: flex;
+            flex-direction: column;
+            width: 320px;
+            max-width: 100%;
+        }
+        
+        .map-wrapper {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 320px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .map-wrapper:last-child {
+            border-bottom: none;
+        }
+        
+        .map-label {
+            padding: 10px;
+            background: #f5f5f5;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .map {
+            width: 320px;
+            height: 320px;
+        }
+        
+        .info-panel {
+            padding: 8px 0;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .info-panel strong {
+            color: #333;
+        }
+        #update-time {
+            text-align: center;
+        }
+        
+        /* 白地図レイヤーを階調逆転 */
+        .inverted-blank-tile {
+            filter: invert(1);
+            mix-blend-mode: lighten;
+        }
+        
+        /* 地図ラベル用のスタイル */
+        .leaflet-control-map-label {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <h1>雲量予想</h1>
+        <div class="info-panel">
+            <div id="update-time">データ取得中...</div>
+        </div>
+        <div class="time-select-container">
+            <button id="time-prev-btn" class="time-select-btn" type="button">◀︎</button>
+            <select id="time-select" class="time-select">
+                <option>データ取得中...</option>
+            </select>
+            <button id="time-next-btn" class="time-select-btn" type="button">▶︎</button>
+        </div>
+    </div>
+    
+    <div class="maps-container">
+        <div class="map-wrapper">
+            <div id="map-upper" class="map"></div>
+        </div>
+        <div class="map-wrapper">
+            <div id="map-middle" class="map"></div>
+        </div>
+        <div class="map-wrapper">
+            <div id="map-lower" class="map"></div>
+        </div>
+    </div>
+    
+    <!-- SunCalc JS -->
+    <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // マップオブジェクト
+        const maps = {
+            lower: null,
+            middle: null,
+            upper: null
+        };
+        
+        // マップを初期化する関数
+        function initMaps() {
+            // 3つのマップを初期化
+            const initialCenter = [35.844535, 139.746094];
+            const initialZoom = 7;
+            
+            maps.lower = L.map('map-lower', {
+                center: initialCenter,
+                zoom: initialZoom
+            });
+            
+            maps.middle = L.map('map-middle', {
+                center: initialCenter,
+                zoom: initialZoom
+            });
+            
+            maps.upper = L.map('map-upper', {
+                center: initialCenter,
+                zoom: initialZoom
+            });
+            
+            // 国土地理院の地図タイルを各マップに追加（写真地図を使用）
+            const baseTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg';
+            const blankTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png';
+            
+            // 写真地図レイヤーを追加（背景）
+            L.tileLayer(baseTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18
+            }).addTo(maps.lower);
+            
+            L.tileLayer(baseTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18
+            }).addTo(maps.middle);
+            
+            L.tileLayer(baseTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18
+            }).addTo(maps.upper);
+            
+            // 白地図を階調逆転して透過率30%で重ねる（不透明度30%）
+            L.tileLayer(blankTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18,
+                className: 'inverted-blank-tile'
+            }).addTo(maps.lower);
+            
+            L.tileLayer(blankTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18,
+                className: 'inverted-blank-tile'
+            }).addTo(maps.middle);
+            
+            L.tileLayer(blankTileUrl, {
+                attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>',
+                maxZoom: 18,
+                className: 'inverted-blank-tile'
+            }).addTo(maps.upper);
+            
+            // 各マップにラベルを追加（右上）
+            const labelUpper = L.control({position: 'topright'});
+            labelUpper.onAdd = function() {
+                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
+                div.innerHTML = '上層';
+                return div;
+            };
+            labelUpper.addTo(maps.upper);
+            
+            const labelMiddle = L.control({position: 'topright'});
+            labelMiddle.onAdd = function() {
+                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
+                div.innerHTML = '中層';
+                return div;
+            };
+            labelMiddle.addTo(maps.middle);
+            
+            const labelLower = L.control({position: 'topright'});
+            labelLower.onAdd = function() {
+                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
+                div.innerHTML = '下層';
+                return div;
+            };
+            labelLower.addTo(maps.lower);
+            
+            // マップのサイズを再計算（複数マップの場合に必要）
+            setTimeout(() => {
+                maps.lower.invalidateSize();
+                maps.middle.invalidateSize();
+                maps.upper.invalidateSize();
+            }, 100);
+            
+            // 3つのマップのズームレベルと位置を連動させる
+            let syncing = false; // 同期中フラグ（無限ループを防ぐ）
+            
+            function syncMaps(sourceMap, targetMap1, targetMap2) {
+                if (syncing) return; // 既に同期中なら何もしない
+                syncing = true;
+                
+                const center = sourceMap.getCenter();
+                const zoom = sourceMap.getZoom();
+                
+                // 他の2つのマップを同期
+                targetMap1.setView(center, zoom);
+                targetMap2.setView(center, zoom);
+                
+                // デバッグ情報を表示
+                console.log(`[地図同期] ズームレベル: ${zoom}, 中心座標: [${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}]`);
+                
+                setTimeout(() => {
+                    syncing = false;
+                }, 100);
+            }
+            
+            // 下層地図の変更を監視して中層・上層に反映
+            maps.lower.on('moveend', function() {
+                if (!syncing) {
+                    syncMaps(maps.lower, maps.middle, maps.upper);
+                }
+            });
+            
+            maps.lower.on('zoomend', function() {
+                if (!syncing) {
+                    syncMaps(maps.lower, maps.middle, maps.upper);
+                }
+            });
+            
+            // 中層地図の変更を監視して下層・上層に反映
+            maps.middle.on('moveend', function() {
+                if (!syncing) {
+                    syncMaps(maps.middle, maps.lower, maps.upper);
+                }
+            });
+            
+            maps.middle.on('zoomend', function() {
+                if (!syncing) {
+                    syncMaps(maps.middle, maps.lower, maps.upper);
+                }
+            });
+            
+            // 上層地図の変更を監視して下層・中層に反映
+            maps.upper.on('moveend', function() {
+                if (!syncing) {
+                    syncMaps(maps.upper, maps.lower, maps.middle);
+                }
+            });
+            
+            maps.upper.on('zoomend', function() {
+                if (!syncing) {
+                    syncMaps(maps.upper, maps.lower, maps.middle);
+                }
+            });
+        }
+        
+        // 雲量レイヤーの管理
+        const cloudLayers = {
+            lower: null,
+            middle: null,
+            upper: null
+        };
+        
+        // レイヤーデータの保存
+        const layerData = {
+            lower: null,
+            middle: null,
+            upper: null
+        };
+        
+        // UTC時刻をJSTに変換して文字列として返す
+        function utcToJSTString(utcString) {
+            const utcDate = new Date(utcString);
+            return utcDate.toLocaleString('ja-JP', {
+                timeZone: 'Asia/Tokyo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).replace(/\//g, '-');
+        }
+        
+        // UTC時刻をJSTに変換して文字列として返す（年なし、プルダウン用）
+        function utcToJSTStringForSelect(utcString) {
+            const utcDate = new Date(utcString);
+            return utcDate.toLocaleString('ja-JP', {
+                timeZone: 'Asia/Tokyo',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // 日の出・日の入りの時間を計算（地図の中心座標を使用）
+        function getSunsetSunriseTimes(date, lat, lon) {
+            const times = SunCalc.getTimes(date, lat, lon);
+            return {
+                sunrise: times.sunrise,
+                sunset: times.sunset
+            };
+        }
+        
+        // 時刻が日の出・日の入りに該当するかチェック（±30分の範囲内）
+        function isSunsetSunriseTime(time, lat, lon) {
+            const date = new Date(time);
+            const sunTimes = getSunsetSunriseTimes(date, lat, lon);
+            const tolerance = 30 * 60 * 1000; // 30分（ミリ秒）
+            
+            const timeMs = date.getTime();
+            const sunriseMs = sunTimes.sunrise.getTime();
+            const sunsetMs = sunTimes.sunset.getTime();
+            
+            return Math.abs(timeMs - sunriseMs) <= tolerance || Math.abs(timeMs - sunsetMs) <= tolerance;
+        }
+        
+        // 日の出・日の入りの時間を取得（該当する場合）
+        function getSunsetSunriseLabel(time, lat, lon) {
+            const date = new Date(time);
+            const sunTimes = getSunsetSunriseTimes(date, lat, lon);
+            const tolerance = 30 * 60 * 1000; // 30分（ミリ秒）
+            
+            const timeMs = date.getTime();
+            const sunriseMs = sunTimes.sunrise.getTime();
+            const sunsetMs = sunTimes.sunset.getTime();
+            
+            if (Math.abs(timeMs - sunriseMs) <= tolerance) {
+                const sunriseTime = sunTimes.sunrise.toLocaleString('ja-JP', {
+                    timeZone: 'Asia/Tokyo',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return ` 日の出 ${sunriseTime}`;
+            } else if (Math.abs(timeMs - sunsetMs) <= tolerance) {
+                const sunsetTime = sunTimes.sunset.toLocaleString('ja-JP', {
+                    timeZone: 'Asia/Tokyo',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return ` 日の入 ${sunsetTime}`;
+            }
+            return '';
+        }
+        
+        // JSONからタイル情報を取得
+        async function loadCloudLayerData(type) {
+            const url = `https://wxtech-tile.wni.co.jp/tile/raster/with/mountain/cloud_${type}/latest.json`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log(`Loaded data for ${type}:`, data);
+                
+                // データを保存
+                layerData[type] = data;
+                
+                return data;
+            } catch (error) {
+                console.error(`Failed to load ${type} cloud layer data:`, error);
+                return null;
+            }
+        }
+        
+        // 下層のJSONから日時プルダウンを作成
+        function setupTimeSelect(data) {
+            const select = document.getElementById('time-select');
+            select.innerHTML = ''; // 既存のオプションをクリア
+            
+            // 地図の中心座標（緯度、経度）
+            const mapCenter = [35.844535, 139.746094];
+            const lat = mapCenter[0];
+            const lon = mapCenter[1];
+            
+            if (data.urls && data.urls.tile) {
+                const tileKeys = Object.keys(data.urls.tile);
+                // 時刻でソート（時系列昇順）
+                tileKeys.sort((a, b) => new Date(a) - new Date(b));
+                
+                tileKeys.forEach((utcKey) => {
+                    const option = document.createElement('option');
+                    option.value = utcKey;
+                    let label = utcToJSTStringForSelect(utcKey);
+                    
+                    // 日の出・日の入りの時間に該当する場合はラベルを追加
+                    if (isSunsetSunriseTime(utcKey, lat, lon)) {
+                        label += getSunsetSunriseLabel(utcKey, lat, lon);
+                    }
+                    
+                    option.textContent = label;
+                    select.appendChild(option);
+                });
+                
+                // 最初の時刻を選択（最古）
+                if (tileKeys.length > 0) {
+                    select.value = tileKeys[0];
+                }
+            }
+            
+            // basetimeをJSTに変換して表示
+            if (data.basetime) {
+                const jstString = utcToJSTString(data.basetime);
+                document.getElementById('update-time').innerHTML = 
+                    `<strong>基準時刻:</strong> ${jstString} (JST)`;
+            }
+        }
+        
+        // 選択された時刻のタイルレイヤーを3つのマップに表示
+        function updateAllMaps(selectedUtcTime) {
+            const types = ['lower', 'middle', 'upper'];
+            
+            types.forEach((type) => {
+                const data = layerData[type];
+                if (!data || !data.urls || !data.urls.tile) {
+                    console.warn(`No data for ${type} layer`);
+                    return;
+                }
+                
+                if (!maps[type]) {
+                    console.error(`Map ${type} is not initialized`);
+                    return;
+                }
+                
+                const tilePath = data.urls.tile[selectedUtcTime];
+                
+                if (!tilePath) {
+                    console.warn(`No tile path for ${type} at time ${selectedUtcTime}`);
+                    console.log(`Available times for ${type}:`, Object.keys(data.urls.tile));
+                    return;
+                }
+                
+                // 相対パスを絶対URLに変換
+                const tileUrl = `https://wxtech-tile.wni.co.jp${tilePath}`;
+                
+                console.log(`Creating layer for ${type}:`, tileUrl);
+                
+                // 既存のレイヤーを削除
+                if (cloudLayers[type]) {
+                    maps[type].removeLayer(cloudLayers[type]);
+                    cloudLayers[type] = null;
+                }
+                
+                // 新しいレイヤーを作成
+                try {
+                    const layerOptions = {
+                        attribution: '&copy; <a href="https://weathernews.jp/">Weathernews Inc.</a>',
+                        opacity: 1.0,
+                        maxNativeZoom: data.options?.maxzoom || 5,  // 実際に存在するタイルの最大ズームレベル
+                        maxZoom: 18  // 地図の最大ズームレベル（タイルを拡大表示）
+                    };
+                    
+                    const layer = L.tileLayer(tileUrl, layerOptions);
+                    
+                    // タイル読み込み成功時のURL表示
+                    layer.on('tileload', function(event) {
+                        console.log(`Tile loaded for ${type}:`, event.tile.src);
+                    });
+                    
+                    // タイル読み込みエラーのハンドリング
+                    layer.on('tileerror', function(error, tile) {
+                        console.error(`Tile error for ${type}:`, error, tile);
+                    });
+                    
+                    cloudLayers[type] = layer;
+                    layer.addTo(maps[type]);
+                    
+                    console.log(`Layer added for ${type} at ${selectedUtcTime}`);
+                } catch (error) {
+                    console.error(`Failed to create layer for ${type}:`, error);
+                }
+            });
+        }
+        
+        // 初期化
+        async function init() {
+            // まずマップを初期化
+            initMaps();
+            
+            // 雲量レイヤーデータを読み込み
+            const results = await Promise.all([
+                loadCloudLayerData('lower'),
+                loadCloudLayerData('middle'),
+                loadCloudLayerData('upper')
+            ]);
+            
+            console.log('Loaded data:', results);
+            console.log('Layer data:', layerData);
+            
+            // 下層のデータから日時プルダウンを作成
+            if (layerData.lower) {
+                setupTimeSelect(layerData.lower);
+                
+                // 日時プルダウンの変更イベント
+                const timeSelect = document.getElementById('time-select');
+                const prevBtn = document.getElementById('time-prev-btn');
+                const nextBtn = document.getElementById('time-next-btn');
+                
+                timeSelect.addEventListener('change', function() {
+                    updateAllMaps(this.value);
+                });
+                
+                // 前の時刻に移動
+                prevBtn.addEventListener('click', function() {
+                    const currentIndex = timeSelect.selectedIndex;
+                    if (currentIndex > 0) {
+                        timeSelect.selectedIndex = currentIndex - 1;
+                        timeSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+                
+                // 次の時刻に移動
+                nextBtn.addEventListener('click', function() {
+                    const currentIndex = timeSelect.selectedIndex;
+                    if (currentIndex < timeSelect.options.length - 1) {
+                        timeSelect.selectedIndex = currentIndex + 1;
+                        timeSelect.dispatchEvent(new Event('change'));
+                    }
+                });
+                
+                // 初期表示（少し遅延させてマップが完全に初期化されるのを待つ）
+                setTimeout(() => {
+                    if (timeSelect.value) {
+                        updateAllMaps(timeSelect.value);
+                    }
+                }, 200);
+            }
+        }
+        
+        // ページ読み込み時に初期化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
