@@ -33,12 +33,28 @@
             box-sizing: border-box;
         }
         
-        .control-panel h1 {
+        .control-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             margin-bottom: 10px;
+        }
+        
+        .control-panel h1 {
+            margin: 0;
             font-size: 20px;
             font-weight: bold;
             color: #333;
-            text-align: center;
+        }
+        
+        #update-time {
+            font-size: 12px;
+            color: #666;
+            margin: 0;
+        }
+        
+        #update-time strong {
+            color: #333;
         }
         
         .time-select-container {
@@ -110,22 +126,9 @@
         
         .map {
             width: 320px;
-            height: 320px;
+            height: 280px;
         }
         
-        .info-panel {
-            padding: 8px 0;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        .info-panel strong {
-            color: #333;
-        }
-        #update-time {
-            text-align: center;
-        }
         
         /* 白地図レイヤーを階調逆転 */
         .inverted-blank-tile {
@@ -146,8 +149,8 @@
 </head>
 <body>
     <div class="control-panel">
-        <h1>雲量予想</h1>
-        <div class="info-panel">
+        <div class="control-panel-header">
+            <h1>雲量予想</h1>
             <div id="update-time">データ取得中...</div>
         </div>
         <div class="time-select-container">
@@ -188,7 +191,7 @@
         // マップを初期化する関数
         function initMaps() {
             // 3つのマップを初期化
-            const initialCenter = [35.844535, 139.746094];
+            const initialCenter = [36.004673, 139.669189];
             const initialZoom = 7;
             
             maps.lower = L.map('map-lower', {
@@ -483,9 +486,9 @@
                 }
             }
             
-            // basetimeをJSTに変換して表示
+            // basetimeをJSTに変換して表示（年なし）
             if (data.basetime) {
-                const jstString = utcToJSTString(data.basetime);
+                const jstString = utcToJSTStringForSelect(data.basetime);
                 document.getElementById('update-time').innerHTML = 
                     `<strong>基準時刻:</strong> ${jstString} (JST)`;
             }
