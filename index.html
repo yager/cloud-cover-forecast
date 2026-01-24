@@ -199,7 +199,7 @@
         </div>
         <div class="map-attribution">
             地図&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>
-            雲&copy; <a href="https://weathernews.jp/">Weathernews Inc.</a>
+            雲量&copy; <a href="https://weathernews.jp/mountain/cloud/?lv=lwr">Weathernews Inc.</a>
         </div>
     </div>
     
@@ -275,7 +275,7 @@
             const blankTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png';
             
             // 写真地図レイヤーを追加（背景）
-            L.tileLayer(baseTileUrl, {
+            const baseTileLayer = L.tileLayer(baseTileUrl, {
                 maxZoom: 18
             }).addTo(maps.lower);
             
@@ -288,7 +288,7 @@
             }).addTo(maps.upper);
             
             // 白地図を階調逆転して透過率30%で重ねる（不透明度30%）
-            L.tileLayer(blankTileUrl, {
+            const blankTileLayer = L.tileLayer(blankTileUrl, {
                 maxZoom: 18,
                 className: 'inverted-blank-tile'
             }).addTo(maps.lower);
@@ -302,6 +302,7 @@
                 maxZoom: 18,
                 className: 'inverted-blank-tile'
             }).addTo(maps.upper);
+            
             
             // 各マップにラベルを追加（右上）
             const labelUpper = L.control({position: 'topright'});
@@ -351,9 +352,6 @@
                 
                 // URLを更新
                 updateUrl(center, zoom);
-                
-                // デバッグ情報を表示
-                console.log(`[地図同期] ズームレベル: ${zoom}, 中心座標: [${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}]`);
                 
                 setTimeout(() => {
                     syncing = false;
@@ -602,22 +600,12 @@
                 // 新しいレイヤーを作成
                 try {
                     const layerOptions = {
-                        opacity: 1.0,
+                        opacity: 0.7,  // 雲レイヤーを70%透過
                         maxNativeZoom: data.options?.maxzoom || 5,  // 実際に存在するタイルの最大ズームレベル
                         maxZoom: 18  // 地図の最大ズームレベル（タイルを拡大表示）
                     };
                     
                     const layer = L.tileLayer(tileUrl, layerOptions);
-                    
-                    // タイル読み込み成功時のURL表示
-                    //layer.on('tileload', function(event) {
-                    //    console.log(`Tile loaded for ${type}:`, event.tile.src);
-                    //});
-                    
-                    // タイル読み込みエラーのハンドリング
-                    //layer.on('tileerror', function(error, tile) {
-                    //    console.error(`Tile error for ${type}:`, error, tile);
-                    //});
                     
                     cloudLayers[type] = layer;
                     layer.addTo(maps[type]);
