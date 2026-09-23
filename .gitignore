@@ -1,0 +1,5 @@
+.DS_Store
+.claude/
+fonts/
+output/
+get_cloud_cover_forecast.php

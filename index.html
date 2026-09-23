@@ -3,8 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雲量予報 - Cloud Cover Forecast</title>
+    <title>雲量予測 - Cloud Cover Forecast</title>
     
+    <!-- Webフォント: 本文=Zen Kaku Gothic New / 数字=Roboto Condensed / ロゴ=Zen Maru Gothic（ロゴは使う4文字だけ取得） -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&text=%E9%9B%B2%E9%87%8F%E4%BA%88%E6%B8%AC&display=swap">
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -25,42 +31,70 @@
             box-sizing: border-box;
         }
         
+        :root {
+            --font-body: "Zen Kaku Gothic New", -apple-system, BlinkMacSystemFont,
+                "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+            --font-logo: "Zen Maru Gothic", "Zen Kaku Gothic New", sans-serif;
+            /* 表の中だけ数字を Roboto Condensed に。日本語は本文と同じ */
+            --font-table: "Roboto Condensed", "Zen Kaku Gothic New", -apple-system, BlinkMacSystemFont,
+                "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+            
+            /* ヘッダーとフッターの帯。雲量レイヤーの色（#92a4ad）から取った薄い青みグレー */
+            --band-bg: #e8edf0;
+            --band-border: #c8d2d8;
+            --content-bg: #ffffff;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--band-bg);
+            font-family: var(--font-body);
+            display: flex;
+            flex-direction: column;
+            min-height: 100dvh;
+            min-width: 320px;
+        }
+        
+        /* コンテンツだけ白。中身が少なくてもフッターが画面下まで下がる */
+        #content {
+            flex: 1 0 auto;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 320px;
+            width: 100%;
+            padding-bottom: 20px;
+            background: var(--content-bg);
         }
 
-        button, select, option {
+        button, select, option, input {
+            font-family: inherit;
             font-size: 14px;
             height: 30px;
             line-height: 30px;
             padding: 0;
         }
         
-        .control-panel {
+        /* ヘッダーとフッターは全幅の帯。幅を決めているのは雲量の地図だけ */
+        .site-header {
+            width: 100%;
             padding: 10px;
-            background: white;
-            /* 検索候補を Leaflet のコントロール（z-index 1000）より上に出す */
-            z-index: 1100;
-            width: 320px;
-            max-width: 100%;
-            box-sizing: border-box;
+            background: var(--band-bg);
+            border-bottom: 1px solid var(--band-border);
         }
         
-        .control-panel-header {
+        .site-header-title {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 10px;
         }
         
-        .control-panel h1 {
+        .site-header h1 {
             margin: 0;
+            font-family: var(--font-logo);
             font-size: 20px;
-            font-weight: bold;
+            line-height: 100%;
+            font-weight: 700;
+            letter-spacing: 0.06em;
             color: #333;
         }
         
@@ -122,23 +156,69 @@
             cursor: pointer;
         }
         
+        /* タブと地図をひとまとまりのパネルにする */
+        .maps-panel {
+            width: 100%;
+            padding: 10px 10px 0;
+        }
+        
         .maps-container {
             display: flex;
             flex-direction: column;
-            width: 320px;
-            max-width: 100%;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #999;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
         }
         
         .map-wrapper {
             display: flex;
             flex-direction: column;
             width: 100%;
-            max-width: 320px;
             border-bottom: 1px solid #ddd;
         }
         
         .map-wrapper:last-child {
             border-bottom: none;
+        }
+        
+        /* 雲量の地図の切り替えタブ（全雲量 / 上・中・下層）。
+           選択中のタブだけ下線を切って、下の地図とつながって見えるようにする */
+        .layer-tabs {
+            display: flex;
+            align-items: flex-end;
+            width: 100%;
+            border-bottom: 1px solid #999;
+        }
+        .layer-tab {
+            min-width: 100px;
+            margin-bottom: -1px;
+            padding: 0 14px;
+            height: 28px;
+            line-height: 26px;
+            font-size: 13px;
+            color: #555;
+            background: #f0f0f0;
+            border: 1px solid #999;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+        }
+        .layer-tab + .layer-tab {
+            margin-left: 4px;
+        }
+        .layer-tab:hover {
+            background: #f8f8f8;
+        }
+        .layer-tab[aria-selected="true"] {
+            color: #333;
+            font-weight: bold;
+            background: white;
+            border-bottom-color: white;
+        }
+        .maps-container[data-view="total"] .layers-only,
+        .maps-container[data-view="layers"] .total-only {
+            display: none;
         }
         
         .map-label {
@@ -151,25 +231,33 @@
         }
         
         .map {
-            width: 300px;
+            width: 100%;
             height: 200px;
-            margin: 0 auto;
             /* 長押しでピンを置くので、iOS の長押しメニューを出さない */
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
         }
         
-        /* 場所検索（スマホは🔍ボタンで開閉） */
-        .search-form {
-            display: none;
+        /* 地図の下に置く「地点」のまとまり（場所検索とピンの情報） */
+        .point-panel {
+            /* 検索候補を Leaflet のコントロール（z-index 1000）より上に出す */
             position: relative;
+            z-index: 1100;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 24px;
+            width: 100%;
+            padding: 10px 10px 0;
+        }
+        
+        .search-form {
+            display: flex;
+            position: relative;
+            flex: 0 1 360px;
             flex-wrap: wrap;
             gap: 5px;
-            margin-top: 8px;
-        }
-        .search-form.open {
-            display: flex;
         }
         .search-input {
             flex: 1;
@@ -234,9 +322,9 @@
         /* ピンを置いた地点の情報（1行） */
         .pin-info {
             display: flex;
+            flex: 1 1 260px;
             align-items: center;
             gap: 6px;
-            margin-top: 8px;
             font-size: 13px;
             color: #333;
         }
@@ -249,36 +337,347 @@
             white-space: nowrap;
             text-overflow: ellipsis;
         }
+        /* 値であることが分かるように、枠で囲った表示にする（角は落とさない） */
         .pin-values {
             flex-shrink: 0;
-            margin-left: auto;
+            padding: 1px 8px;
+            font-family: var(--font-table);
             font-variant-numeric: tabular-nums;
+            background: #f4f7f8;
+            border: 1px solid var(--band-border);
         }
-        .pin-clear-btn {
+        .pin-values b {
+            font-weight: 700;
+            color: #222;
+        }
+        .pin-values .unit,
+        .pin-values .layer {
+            color: #777;
+            font-size: 11px;
+        }
+        .pin-values:empty {
+            display: none;
+        }
+        .pin-clear-btn,
+        .search-toggle-btn {
             flex-shrink: 0;
-            width: 24px;
-            height: 24px;
-            line-height: 22px;
-            font-size: 16px;
+            height: 26px;
+            line-height: 24px;
+            padding: 0;
+            font-size: 14px;
             color: #666;
             border: 1px solid #ccc;
             border-radius: 4px;
             background: white;
             cursor: pointer;
         }
+        .pin-clear-btn,
+        .search-toggle-btn {
+            width: 26px;
+        }
+        .pin-clear-btn:hover,
+        .search-toggle-btn:hover {
+            background: #f0f0f0;
+        }
+        
+        /* 検索欄は、スマホでピンが決まっている間だけ虫眼鏡ボタンに畳む */
+        .search-toggle-btn {
+            margin-left: auto;
+        }
+        .point-panel.search-collapsed .search-form {
+            display: none;
+        }
+        .point-panel:not(.search-collapsed) .search-toggle-btn {
+            display: none;
+        }
         
         .pin-marker {
             background: none;
             border: none;
         }
-        .map-attribution {
-            margin-top: 15px;
-            padding: 0 0 10px 0;
+        /* 予測・予報の表（行＝項目、列＝時刻。左端の項目名を固定して横スクロール） */
+        /* 表は画面の横幅いっぱいに使う（幅を決めているのは雲量の地図だけ） */
+        .forecast {
+            width: 100%;
+            margin-top: 20px;
+            padding: 0 10px;
+        }
+        
+        /* 出所で色を変える。数値予報モデルの「予測」と、気象庁の「予報」を見分けやすくする */
+        .forecast-model {
+            --accent: #6a7e9b;
+            --badge-bg: #eef2f7;
+            --badge-border: #b9c6d6;
+            --badge-color: #45566e;
+        }
+        .forecast-official {
+            --accent: #5c8a64;
+            --badge-bg: #eef4ef;
+            --badge-border: #bcd2bf;
+            --badge-color: #3e6a47;
+        }
+        .forecast h2 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-left: 8px;
+            margin-bottom: 5px;
+            border-left: 4px solid var(--accent);
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        /* 出典はバッジにする */
+        .forecast h2 small {
+            padding: 1px 6px;
+            font-size: 11px;
+            font-weight: normal;
+            color: var(--badge-color);
+            background: var(--badge-bg);
+            border: 1px solid var(--badge-border);
+            border-radius: 3px;
+        }
+        /* 出典や発表時刻など、注意書きではない情報 */
+        .forecast-meta {
+            margin: 3px 0 6px;
+            font-size: 10.5px;
+            line-height: 1.5;
+            color: #666;
+        }
+        
+        /* 説明は「i」を押したときだけ出す（繰り返し使うときに邪魔にならないように） */
+        .info-btn {
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            padding: 0;
+            font-size: 15px;
+            color: #7a8791;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .info-btn:hover {
+            color: #40505c;
+        }
+        /* 「i」ボタンの真下に出る吹き出し。位置は JS で合わせる */
+        .info-popover {
+            display: none;
+            position: fixed;
+            inset: auto;
+            max-width: 280px;
+            margin: 4px 0 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #444;
+            background: white;
+            border: 1px solid #9aa7b0;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+        }
+        .info-popover:popover-open,
+        .info-popover.open {
+            display: block;
+        }
+        .info-popover:popover-open {
+            margin: 0;
+        }
+        /* 吹き出しの三角（ボタンの位置に合わせて --arrow-x を動かす） */
+        .info-popover:popover-open::before,
+        .info-popover:popover-open::after {
+            content: "";
+            position: absolute;
+            top: -7px;
+            left: var(--arrow-x, 20px);
+            border: 7px solid transparent;
+            border-top: none;
+            border-bottom-color: #9aa7b0;
+        }
+        .info-popover:popover-open::after {
+            top: -6px;
+            border-bottom-color: white;
+        }
+        /* popover に対応していないブラウザでは見出しの下に普通に開く */
+        .info-popover.open {
+            position: static;
+        }
+        .forecast-hint {
+            flex-basis: 100%;
+            font-size: 12px;
+            color: #666;
+        }
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            /* 幅の狭い Roboto Condensed を使うぶん、文字は少し大きめにする */
+            font-family: var(--font-table);
+            font-size: 12px;
+        }
+        /* 枠線は「セルの右と下」で引く。左端の固定列だけ自分の左線を持たせると、
+           横スクロールしても線が流れず、太さも1pxのまま揃う */
+        .table-container table {
+            border-collapse: separate;
+            border-spacing: 0;
+            border-top: 1px solid #ccc;
+            background: white;
+        }
+        .table-container th {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            white-space: pre;
+            text-align: left;
+            font-size: 12px;
+            background: #eee;
+            border-left: 1px solid #ccc;
+            border-right: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+            padding: 2px 6px;
+            /* 右に薄い影を落として、続きがあることを示す */
+            box-shadow: 4px 0 5px -4px rgba(0, 0, 0, 0.2);
+        }
+        .table-container td {
+            font-variant-numeric: tabular-nums;
+            min-width: 44px;
+            padding: 2px 4px;
+            font-size: 12px;
+            line-height: 1.5;
+            text-align: center;
+            white-space: nowrap;
+            border-right: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+        }
+        .table-container tr[data-key="日付"] td {
+            background: #eef;
+            font-weight: bold;
+        }
+        /* 同じ日をまとめたセル（1時間予測・2週間予測）だけ左寄せにする */
+        .table-container td.date-cell {
+            text-align: left;
+            padding: 2px 0;
+        }
+        /* 日付は、その日の列が見えている間ずっと左端に貼り付く */
+        .table-container .date-label {
+            position: sticky;
+            left: var(--label-width, 50px);
+            display: inline-block;
+            padding: 0 6px;
+        }
+        /* 1時間降水量（気象庁の「雨の強さと降り方」の区切り）。
+           30mm（激しい雨）以上は警戒色にする */
+        .table-container td.rain-1 { background: #eef6ff; }
+        .table-container td.rain-2 { background: #d3e8ff; }
+        .table-container td.rain-3 { background: #a8d2ff; }
+        .table-container td.rain-4 { background: #6fb0f5; }
+        .table-container td.rain-5 { background: #2f7fd6; color: white; }
+        .table-container td.rain-6 { background: #ff9900; }
+        .table-container td.rain-7 { background: #ff2800; color: white; }
+        .table-container td.rain-8 { background: #b40068; color: white; }
+        
+        /* 気圧の変化（気圧痛の目安）。低下＝ピンク、上昇＝青。濃さは上下で対称 */
+        .table-container td.press-fall-1 { background: #fbe8f0; }
+        .table-container td.press-fall-2 { background: #f3b6d1; }
+        .table-container td.press-fall-3 { background: #e58ab5; }
+        .table-container td.press-rise-1 { background: #e3edf6; }
+        .table-container td.press-rise-2 { background: #b9d3ec; }
+        .table-container td.press-rise-3 { background: #8fb8e0; }
+        
+        /* 気温は背景を使わず文字色で。-5℃未満と猛暑日だけ太字にする */
+        .table-container td.temp-cold3 { color: #0d47a1; font-weight: 700; }
+        .table-container td.temp-cold2 { color: #1565c0; }
+        .table-container td.temp-cold1 { color: #4a86c5; }
+        .table-container td.temp-hot1 { color: #c77700; }
+        .table-container td.temp-hot2 { color: #d95926; }
+        .table-container td.temp-hot3 { color: #c62828; font-weight: 700; }
+        
+        /* 湿度は両端だけ。30%以下は乾燥、80%以上は霧・雲海が出やすい側 */
+        .table-container td.humid-dry { background: #f6efe2; }
+        .table-container td.humid-1 { background: #e6ddf5; }
+        .table-container td.humid-2 { background: #c3b2e6; }
+        .table-container td.humid-3 { background: #9b86d6; color: white; }
+        
+        /* 風の強さ（5/10/15/20/25 m/s） */
+        .table-container td.wind-1 { background: #eeffee; }
+        .table-container td.wind-2 { background: #ccffcc; }
+        .table-container td.wind-3 { background: #aaffaa; }
+        .table-container td.wind-4 { background: #99ff99; }
+        .table-container td.wind-5 { background: #77ff77; }
+        
+        /* 雲量の多さ（20/40/60/80/100%） */
+        .table-container td.cloud-1 { background: #eeeeee; }
+        .table-container td.cloud-2 { background: #d8d8d8; }
+        .table-container td.cloud-3 { background: #c0c0c0; }
+        .table-container td.cloud-4 { background: #a8a8a8; }
+        .table-container td.cloud-5 { background: #909090; }
+        /* 過ぎた時刻のセルは全体を薄く（雲量の濃淡も付けない） */
+        .table-container tr[data-key] td.past {
+            background: white;
+            color: #ccc;
+        }
+        /* 日付の行は見出しなので背景を変えない */
+        .table-container tr[data-key="日付"] td.past {
+            background-color: #eef;
+            color: inherit;
+        }
+        .table-container td.pin-time {
+            border-left: 2px solid #e53935;
+            border-right: 2px solid #e53935;
+        }
+        .table-container tr[data-key="時刻"] td.pin-time {
+            border-top: 2px solid #e53935;
+        }
+        .table-container tr:last-child td.pin-time {
+            border-bottom: 2px solid #e53935;
+        }
+        .table-container td img {
+            width: 36px;
+            height: 24px;
+        }
+        .table-container .telop {
+            font-size: 10px;
+            line-height: 1.2;
+            color: #555;
+        }
+        .wind-arrow {
+            display: inline-block;
+            color: #1565c0;
+        }
+        .range {
+            color: #888;
+            font-size: 9px;
+        }
+        .forecast-error {
+            font-size: 12px;
+            color: #b00;
+        }
+        
+        .site-footer {
+            width: 100%;
+            padding: 10px;
+            background: var(--band-bg);
+            border-top: 1px solid var(--band-border);
             font-size: 12px;
             line-height: 1.6;
             color: #666;
         }
-        .map-attribution .notice {
+        .footer-heading {
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+        }
+        .site-credit {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid var(--band-border);
+            font-size: 11px;
+            color: #777;
+        }
+        .site-credit a {
+            margin-left: 8px;
+        }
+        .site-footer .notice {
             margin-top: 4px;
             font-size: 10.5px;
             line-height: 1.5;
@@ -315,18 +714,19 @@
         @media (min-width: 1000px) {
             :root {
                 --map-gap: 12px;
-                --map-width: min(600px, calc((100vw - 2 * var(--map-gap) - 40px) / 3));
-                --maps-width: calc(3 * var(--map-width) + 2 * var(--map-gap));
+                /* 画面幅から、スクロールバー・パネルの左右の余白・枠・枠内の余白・
+                   地図どうしの隙間（15 + 20 + 2 + 24 + 24 = 85px）を引いて3等分する */
+                --map-width: min(600px, calc((100vw - 88px) / 3));
+                --maps-width: calc(3 * var(--map-width) + 70px);
             }
 
-            .control-panel {
-                width: var(--maps-width);
+            .site-header {
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
                 column-gap: 24px;
                 row-gap: 8px;
-                padding: 12px 0;
+                padding: 10px 0 10px 10px;
             }
             
             .time-select {
@@ -334,15 +734,14 @@
                 flex: none;
             }
             
-            /* PCは検索欄を常に表示 */
+            /* PCは横に余裕があるので、検索欄は常に出しておく */
+            .point-panel.search-collapsed .search-form {
+                display: flex;
+            }
             .search-toggle-btn {
                 display: none;
             }
-            .search-form {
-                display: flex;
-                flex: 0 1 360px;
-                margin-top: 0;
-            }
+            
             .search-status {
                 position: absolute;
                 top: 35px;
@@ -353,27 +752,24 @@
                 border: 1px solid #ccc;
                 border-radius: 4px;
             }
-            
-            .pin-info {
-                flex: 1 1 280px;
-                margin-top: 0;
-            }
 
-            .control-panel-header {
+            .site-header-title {
                 margin-bottom: 0;
                 gap: 16px;
             }
 
-            .maps-container {
-                flex-direction: row;
-                flex-wrap: wrap;
-                gap: var(--map-gap);
+            .maps-panel {
                 width: var(--maps-width);
             }
-
+            
+            .maps-container {
+                flex-direction: row;
+                gap: var(--map-gap);
+                padding: var(--map-gap);
+            }
+            
             .map-wrapper {
                 width: var(--map-width);
-                max-width: none;
                 border-bottom: none;
             }
 
@@ -381,26 +777,30 @@
                 width: var(--map-width);
                 height: calc(var(--map-width) * 2 / 3);
             }
-
-            .map-attribution {
-                width: 100%;
-                margin-top: 8px;
-            }
             
+            /* 全雲量は1枚だけなので、パネルの横幅いっぱいに広げる */
+            .maps-container[data-view="total"] .map-wrapper,
+            .maps-container[data-view="total"] .map {
+                width: 100%;
+            }
+            .maps-container[data-view="total"] .map {
+                height: calc(var(--map-width) * 2 / 3);
+            }
+
             /* PCは幅に余裕があるので、出典2つは1行に並べる */
-            .map-attribution .credit {
+            .site-footer .credit {
                 display: inline;
             }
-            .map-attribution .credit + .credit {
+            .site-footer .credit + .credit {
                 margin-left: 1.5em;
             }
         }
         </style>
 </head>
 <body>
-    <div class="control-panel">
-        <div class="control-panel-header">
-            <h1><a id="title-link" href="https://yager.github.io/cloud-cover-forecast/">雲量予想</a></h1>
+    <header class="site-header">
+        <div class="site-header-title">
+            <h1><a id="title-link" href="https://yager.github.io/cloud-cover-forecast/">雲量予測</a></h1>
             <div id="update-time">データ取得中...</div>
         </div>
         <div class="time-select-container">
@@ -409,8 +809,33 @@
                 <option>データ取得中...</option>
             </select>
             <button id="time-next-btn" class="time-select-btn" type="button">▶︎</button>
-            <button id="search-toggle-btn" class="time-select-btn search-toggle-btn" type="button" aria-label="場所を検索" aria-controls="search-form" aria-expanded="false">🔍</button>
         </div>
+    </header>
+    
+    <main id="content">
+        <div class="maps-panel">
+        <div class="layer-tabs" role="tablist">
+            <button type="button" class="layer-tab" data-view="total" role="tab">全雲量</button>
+            <button type="button" class="layer-tab" data-view="layers" role="tab">上・中・下層</button>
+        </div>
+        
+        <div class="maps-container" id="maps-container">
+            <div class="map-wrapper total-only">
+                <div id="map-total" class="map"></div>
+            </div>
+            <div class="map-wrapper layers-only">
+                <div id="map-upper" class="map"></div>
+            </div>
+            <div class="map-wrapper layers-only">
+                <div id="map-middle" class="map"></div>
+            </div>
+            <div class="map-wrapper layers-only">
+                <div id="map-lower" class="map"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="point-panel">
         <form id="search-form" class="search-form" role="search">
             <input id="search-input" class="search-input" type="search" placeholder="地名・住所・緯度経度" enterkeyhint="search" autocomplete="off">
             <button class="search-submit" type="submit">検索</button>
@@ -418,28 +843,66 @@
             <ul id="search-results" class="search-results" hidden></ul>
         </form>
         <div id="pin-info" class="pin-info" hidden>
+            <button id="pin-clear-btn" class="pin-clear-btn" type="button" aria-label="ピンを消す">×</button>
             <span id="pin-name" class="pin-name"></span>
             <span id="pin-values" class="pin-values"></span>
-            <button id="pin-clear-btn" class="pin-clear-btn" type="button" aria-label="ピンを消す">×</button>
         </div>
+        <button id="search-toggle-btn" class="search-toggle-btn" type="button" aria-label="地点を変更" title="地点を変更" aria-controls="search-form" aria-expanded="false">🔍</button>
+        <p id="forecast-hint" class="forecast-hint">地点にピンを立てると、その地点の予測を表示します（PCはクリック、スマホは長押し、または上の検索）。</p>
     </div>
     
-    <div class="maps-container">
-        <div class="map-wrapper">
-            <div id="map-upper" class="map"></div>
+    <section id="forecast-msm" class="forecast forecast-model" hidden>
+        <h2>1時間予測 <small>気象庁MSM</small>
+            <button class="info-btn" type="button" popovertarget="info-msm" aria-label="このデータについて">ⓘ</button>
+        </h2>
+        <div id="info-msm" class="info-popover" popover>
+            気象庁メソモデル（MSM）の計算値です。気象庁が発表する天気予報とは別のもので、誤差を含みます。
+            気温は地点の標高に合わせて補正した値です。
+            気圧の色は、6時間の変化（±2/4/6hPa）と24時間の変化（±5/8/12hPa）の強いほうで付けた気圧痛の目安です。
+            医学的な診断ではなく、感じ方には個人差があります。
         </div>
-        <div class="map-wrapper">
-            <div id="map-middle" class="map"></div>
+        <div class="table-container"><table id="msm-table"></table></div>
+    </section>
+    
+    <section id="forecast-aifs" class="forecast forecast-model" hidden>
+        <h2>2週間予測 <small>ECMWF AIFS</small>
+            <button class="info-btn" type="button" popovertarget="info-aifs" aria-label="このデータについて">ⓘ</button>
+        </h2>
+        <div id="info-aifs" class="info-popover" popover>
+            ECMWFのAIモデル（AIFS）の計算値です。6時間ごとの値をそのまま並べています。先になるほど誤差が大きくなります。
+            気温は地点の標高に合わせて補正した値、降水量は6時間の合計を1時間あたりに直した値です。
+            気圧の色は、6時間の変化（±2/4/6hPa）と24時間の変化（±5/8/12hPa）の強いほうで付けた気圧痛の目安です。
+            医学的な診断ではありません。
         </div>
-        <div class="map-wrapper">
-            <div id="map-lower" class="map"></div>
+        <div class="table-container"><table id="aifs-table"></table></div>
+    </section>
+    
+    <section id="forecast-jma" class="forecast forecast-official" hidden>
+        <h2>週間予報 <small>気象庁</small>
+            <button class="info-btn" type="button" popovertarget="info-jma" aria-label="このデータについて">ⓘ</button>
+        </h2>
+        <div id="info-jma" class="info-popover" popover>
+            気象庁が発表した週間予報です。先頭の日は降水確率と気温が空欄になります（その日は3日先までの予報が受け持つため）。
+            信頼度（A〜C）は3日目以降に付きます。
         </div>
-        <div class="map-attribution">
-            <div class="credit">地図・場所検索: <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a></div>
-            <div class="credit">雲量: 気象庁MSM / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
-            <div class="notice">気象庁メソモデル（MSM）の数値計算結果を格子ごとに色分けしたものです。予報ではなく、大きな誤差を含むことがあります。</div>
+        <p class="forecast-meta" id="jma-meta"></p>
+        <div class="table-container"><table id="jma-table"></table></div>
+    </section>
+    
+    </main>
+    
+    <footer class="site-footer">
+        <h2 class="footer-heading">情報ソース</h2>
+        <div class="credit">地図・場所検索: <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a></div>
+        <div class="credit">雲量・1時間予測・2週間予測: 気象庁MSM / ECMWF AIFS / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
+        <div class="credit">週間予報: <a href="https://www.jma.go.jp/bosai/forecast/">気象庁</a></div>
+        <div class="notice">雲量の地図・1時間予測・2週間予測は、数値予報モデルが計算した予測値をそのまま表示したものです。気象庁が発表する天気予報とは別のもので、誤差を含みます。週間予報は気象庁が発表した予報です。</div>
+        <div class="site-credit">
+            &copy; 2026 yager
+            <a href="https://github.com/yager/cloud-cover-forecast/blob/main/LICENSE">MIT License</a>
+            <a href="https://github.com/yager/cloud-cover-forecast">GitHub</a>
         </div>
-    </div>
+    </footer>
     
     <!-- SunCalc JS -->
     <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
@@ -449,17 +912,30 @@
     
     <script type="module">
         import { PinController, setupSearch, formatLatLng } from './pin.js';
+        import {
+            loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
+            jstKey, formatDateLabel, formatHourLabel
+        } from './weather.js';
         
         // マップオブジェクト
         const maps = {
+            total: null,
             lower: null,
             middle: null,
             upper: null
         };
         
+        // 地図の表示の切り替え（total: 総雲量1枚 / layers: 上中下層の3枚）
+        const PC_MEDIA = '(min-width: 1000px)';
+        let mapView = null;
+        
         // 行きたい地点のピンと、雲量データのソース（init で作る）
         let pinController = null;
         let cloudSource = null;
+        
+        // 雲量地図が使っている計算の基準時刻。1時間予測の表もここから始める
+        let resolveCloudBaseTime;
+        const cloudBaseTime = new Promise((resolve) => { resolveCloudBaseTime = resolve; });
         
         // 日の出・日の入りを計算する既定の地点（ピンが無いとき）
         const DEFAULT_SUN_POINT = { lat: 35.844535, lng: 139.746094 };
@@ -518,6 +994,7 @@
                 zoomSnap: 0.25
             };
             
+            maps.total = L.map('map-total', mapOptions);
             maps.lower = L.map('map-lower', mapOptions);
             maps.middle = L.map('map-middle', mapOptions);
             maps.upper = L.map('map-upper', mapOptions);
@@ -533,81 +1010,47 @@
             const baseTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg';
             const blankTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png';
             
-            // 写真地図レイヤーを追加（背景）
-            const baseTileLayer = L.tileLayer(baseTileUrl, {
-                maxZoom: 18
-            }).addTo(maps.lower);
-            
-            L.tileLayer(baseTileUrl, {
-                maxZoom: 18
-            }).addTo(maps.middle);
-            
-            L.tileLayer(baseTileUrl, {
-                maxZoom: 18
-            }).addTo(maps.upper);
-            
-            // 白地図を階調逆転して透過率30%で重ねる（不透明度30%）
-            const blankTileLayer = L.tileLayer(blankTileUrl, {
-                maxZoom: 18,
-                className: 'inverted-blank-tile'
-            }).addTo(maps.lower);
-            
-            L.tileLayer(blankTileUrl, {
-                maxZoom: 18,
-                className: 'inverted-blank-tile'
-            }).addTo(maps.middle);
-            
-            L.tileLayer(blankTileUrl, {
-                maxZoom: 18,
-                className: 'inverted-blank-tile'
-            }).addTo(maps.upper);
-            
+            // 背景（写真地図）と、階調を反転した白地図を各地図に重ねる
+            for (const map of Object.values(maps)) {
+                L.tileLayer(baseTileUrl, { maxZoom: 18 }).addTo(map);
+                L.tileLayer(blankTileUrl, { maxZoom: 18, className: 'inverted-blank-tile' }).addTo(map);
+            }
             
             // 各マップにラベルを追加（右上）
-            const labelUpper = L.control({position: 'topright'});
-            labelUpper.onAdd = function() {
-                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '上層<small>5500m付近〜</small>';
-                return div;
+            const MAP_LABELS = {
+                total: '全雲量<small>空全体</small>',
+                upper: '上層<small>5500m付近〜</small>',
+                middle: '中層<small>1500〜5500m付近</small>',
+                lower: '下層<small>〜1500m付近</small>'
             };
-            labelUpper.addTo(maps.upper);
-            
-            const labelMiddle = L.control({position: 'topright'});
-            labelMiddle.onAdd = function() {
-                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '中層<small>1500〜5500m付近</small>';
-                return div;
-            };
-            labelMiddle.addTo(maps.middle);
-            
-            const labelLower = L.control({position: 'topright'});
-            labelLower.onAdd = function() {
-                const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-                div.innerHTML = '下層<small>〜1500m付近</small>';
-                return div;
-            };
-            labelLower.addTo(maps.lower);
+            for (const [type, html] of Object.entries(MAP_LABELS)) {
+                const label = L.control({ position: 'topright' });
+                label.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'leaflet-control-map-label');
+                    div.innerHTML = html;
+                    return div;
+                };
+                label.addTo(maps[type]);
+            }
             
             // マップのサイズを再計算（複数マップの場合に必要）
             setTimeout(() => {
-                maps.lower.invalidateSize();
-                maps.middle.invalidateSize();
-                maps.upper.invalidateSize();
+                Object.values(maps).forEach((map) => map.invalidateSize());
             }, 100);
             
-            // 3つのマップのズームレベルと位置を連動させる
+            // すべての地図のズームレベルと位置を連動させる
             let syncing = false; // 同期中フラグ（無限ループを防ぐ）
             
-            function syncMaps(sourceMap, targetMap1, targetMap2) {
+            function syncMaps(sourceMap) {
                 if (syncing) return; // 既に同期中なら何もしない
                 syncing = true;
                 
                 const center = sourceMap.getCenter();
                 const zoom = sourceMap.getZoom();
                 
-                // 他の2つのマップを同期
-                targetMap1.setView(center, zoom);
-                targetMap2.setView(center, zoom);
+                for (const map of Object.values(maps)) {
+                    if (map !== sourceMap) map.setView(center, zoom);
+                }
                 
                 // URLを更新
                 updateUrl(center, zoom);
@@ -617,44 +1060,11 @@
                 }, 100);
             }
             
-            // 下層地図の変更を監視して中層・上層に反映
-            maps.lower.on('moveend', function() {
-                if (!syncing) {
-                    syncMaps(maps.lower, maps.middle, maps.upper);
-                }
-            });
-            
-            maps.lower.on('zoomend', function() {
-                if (!syncing) {
-                    syncMaps(maps.lower, maps.middle, maps.upper);
-                }
-            });
-            
-            // 中層地図の変更を監視して下層・上層に反映
-            maps.middle.on('moveend', function() {
-                if (!syncing) {
-                    syncMaps(maps.middle, maps.lower, maps.upper);
-                }
-            });
-            
-            maps.middle.on('zoomend', function() {
-                if (!syncing) {
-                    syncMaps(maps.middle, maps.lower, maps.upper);
-                }
-            });
-            
-            // 上層地図の変更を監視して下層・中層に反映
-            maps.upper.on('moveend', function() {
-                if (!syncing) {
-                    syncMaps(maps.upper, maps.lower, maps.middle);
-                }
-            });
-            
-            maps.upper.on('zoomend', function() {
-                if (!syncing) {
-                    syncMaps(maps.upper, maps.lower, maps.middle);
-                }
-            });
+            for (const map of Object.values(maps)) {
+                map.on('moveend zoomend', function() {
+                    if (!syncing) syncMaps(map);
+                });
+            }
         }
         
         // UTC時刻をJSTに変換して文字列として返す
@@ -800,7 +1210,7 @@
             let requestedTime = null;
             let currentFrame = null;
             
-            ['lower', 'middle', 'upper'].forEach((type) => {
+            Object.keys(maps).forEach((type) => {
                 layers[type] = new msm.CloudGridLayer().addTo(maps[type]);
             });
             
@@ -815,7 +1225,7 @@
                     if (!cell) return null;
                     const i = cell.iy * msm.GRID.nx + cell.ix;
                     const value = (type) => currentFrame[type][i] === msm.MISSING ? null : currentFrame[type][i];
-                    return { upper: value('upper'), middle: value('middle'), lower: value('lower') };
+                    return { total: value('total'), upper: value('upper'), middle: value('middle'), lower: value('lower') };
                 },
                 
                 async show(time) {
@@ -830,7 +1240,7 @@
                     // 読み込み中に別の時刻が選ばれていたら捨てる
                     if (requestedTime !== time) return;
                     currentFrame = frame;
-                    ['lower', 'middle', 'upper'].forEach((type) => layers[type].setValues(frame[type]));
+                    Object.keys(maps).forEach((type) => layers[type].setValues(frame[type]));
                     onFrame();
                     
                     // 次のコマを先読み
@@ -839,6 +1249,315 @@
                     if (next) source.loadFrame(next.value).catch(() => {});
                 }
             };
+        }
+        
+        // --- 予報の表 ---
+        
+        // 行＝項目、列＝時刻の表を作る。
+        // rows: [{ key, cells: [文字列またはHTML] }]、times: 列に対応する時刻（赤線の判定に使う）
+        function renderTable(table, rows, times) {
+            table.innerHTML = '';
+            // 列の刻み（分）。過ぎた時刻の判定に使う
+            if (times && times.length > 1) {
+                const first = new Date(`${times[0]}:00+09:00`).getTime();
+                const second = new Date(`${times[1]}:00+09:00`).getTime();
+                table.dataset.stepMinutes = String((second - first) / 60000);
+            }
+            for (const row of rows) {
+                const tr = document.createElement('tr');
+                tr.dataset.key = row.key;
+                const th = document.createElement('th');
+                th.textContent = row.key;
+                tr.appendChild(th);
+                row.cells.forEach((cell, i) => {
+                    const td = document.createElement('td');
+                    // セルは文字列か { html, colspan, time }
+                    if (typeof cell === 'string') {
+                        td.innerHTML = cell;
+                        if (times) td.dataset.time = times[i];
+                    } else {
+                        td.innerHTML = cell.html;
+                        if (cell.colspan) td.colSpan = cell.colspan;
+                        const time = cell.time || (times ? times[i] : null);
+                        if (time) td.dataset.time = time;
+                        if (cell.cls) td.className = cell.cls;
+                    }
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            }
+            
+            // 日付ラベルは、左端の項目名の右隣に貼り付ける
+            const label = table.querySelector('th');
+            if (label) table.style.setProperty('--label-width', `${label.offsetWidth}px`);
+        }
+        
+        const num = (v, digits = 0) => v === null || v === undefined ? '−' : v.toFixed(digits);
+        
+        // 1時間降水量の強さ。区切りは気象庁の「雨の強さと降り方」に合わせ、
+        // 30mm（激しい雨）以上は青系から離して警戒色にする
+        function rainCell(value) {
+            const html = num(value, 1);
+            if (value === null || value === undefined || value < 0.1) return html;
+            const step = value >= 80 ? 8 : value >= 50 ? 7 : value >= 30 ? 6 : value >= 20 ? 5
+                : value >= 10 ? 4 : value >= 5 ? 3 : value >= 1 ? 2 : 1;
+            return { html, cls: `rain-${step}` };
+        }
+        
+        // 気圧痛の目安。「6時間の急な変化」と「24時間でのじわじわした変化」の
+        // 強いほうを採る（前日比5hPa以上の低下で頭痛が増える、という報告に合わせている）。
+        // 体感に合わせて調整するときはここだけ変える。
+        const PRESSURE_RULES = [
+            { hours: 6, levels: [2, 4, 6] },
+            { hours: 24, levels: [5, 8, 12] }
+        ];
+        
+        // stepHours: その表の1コマが何時間か（1時間予測=1、2週間予測=6）
+        function pressureCells(values, stepHours) {
+            return values.map((value, i) => {
+                const html = num(value);
+                if (value === null || value === undefined) return html;
+                
+                let worst = { step: 0, change: 0 };
+                for (const rule of PRESSURE_RULES) {
+                    const back = rule.hours / stepHours;
+                    const previous = values[i - back];
+                    if (!Number.isInteger(back) || previous === null || previous === undefined) continue;
+                    const change = value - previous;
+                    const size = Math.abs(change);
+                    const step = size >= rule.levels[2] ? 3 : size >= rule.levels[1] ? 2 : size >= rule.levels[0] ? 1 : 0;
+                    if (step > worst.step || (step === worst.step && size > Math.abs(worst.change))) {
+                        worst = { step, change };
+                    }
+                }
+                if (worst.step === 0) return html;
+                return { html, cls: `press-${worst.change < 0 ? 'fall' : 'rise'}-${worst.step}` };
+            });
+        }
+        
+        // 気温は文字色だけで表す。区切りは 0℃（凍結）と気象庁の夏日・真夏日・猛暑日
+        function temperatureCell(value) {
+            const html = num(value, 1);
+            if (value === null || value === undefined) return html;
+            const cls = value >= 35 ? 'temp-hot3' : value >= 30 ? 'temp-hot2' : value >= 25 ? 'temp-hot1'
+                : value < -5 ? 'temp-cold3' : value < 0 ? 'temp-cold2' : value < 5 ? 'temp-cold1' : null;
+            return cls ? { html, cls } : html;
+        }
+        
+        // 湿度は、判断に効く両端だけ色を付ける（乾燥＝砂色、多湿＝藤色）
+        function humidityCell(value) {
+            const html = num(value);
+            if (value === null || value === undefined) return html;
+            if (value <= 30) return { html, cls: 'humid-dry' };
+            if (value >= 100) return { html, cls: 'humid-3' };
+            if (value >= 90) return { html, cls: 'humid-2' };
+            if (value >= 80) return { html, cls: 'humid-1' };
+            return html;
+        }
+        
+        // 雲量の多さを背景の濃さで表す（地図の色分けと同じ 20/40/60/80/100 の区切り）
+        function cloudCell(value) {
+            const html = num(value);
+            if (value === null || value === undefined) return html;
+            const step = value >= 100 ? 5 : value >= 80 ? 4 : value >= 60 ? 3 : value >= 40 ? 2 : value >= 20 ? 1 : 0;
+            return step === 0 ? html : { html, cls: `cloud-${step}` };
+        }
+        
+        // 数値計算の結果（MSM・AIFS）の表。stepHours は1コマの長さ（気圧の変化量の計算に使う）
+        function forecastRows(series, stepHours) {
+            const v = series.values;
+            
+            // 同じ日付の列をひとつのセルにまとめる。
+            // 中のラベルを固定するので、横スクロールしても日付が次の日まで残る
+            const dateGroups = [];
+            series.times.forEach((t) => {
+                const label = formatDateLabel(t);
+                const last = dateGroups[dateGroups.length - 1];
+                if (last && last.html === label) last.colspan += 1;
+                else dateGroups.push({ html: label, colspan: 1, time: t });
+            });
+            
+            return [
+                { key: '日付', cells: dateGroups.map(g => ({ ...g, cls: 'date-cell', html: `<span class="date-label">${g.html}</span>` })) },
+                { key: '時刻', cells: series.times.map(formatHourLabel) },
+                { key: '上層雲', cells: v.cloud_cover_high.map(cloudCell) },
+                { key: '中層雲', cells: v.cloud_cover_mid.map(cloudCell) },
+                { key: '下層雲', cells: v.cloud_cover_low.map(cloudCell) },
+                { key: '気温', cells: v.temperature_2m.map(temperatureCell) },
+                { key: '降水量', cells: v.precipitation.map(rainCell) },
+                { key: '風', cells: v.wind_speed_10m.map((speed, i) => {
+                    const dir = v.wind_direction_10m[i];
+                    const arrow = dir === null ? '' : `<span class="wind-arrow" style="transform: rotate(${dir}deg)">↓</span>`;
+                    const html = `${arrow}${num(speed, 1)}`;
+                    if (speed === null || speed < 5) return html;
+                    // 5/10/15/20/25 m/s で色を濃くする（参考実装と同じ区切り）
+                    const step = speed >= 25 ? 5 : speed >= 20 ? 4 : speed >= 15 ? 3 : speed >= 10 ? 2 : 1;
+                    return { html, cls: `wind-${step}` };
+                }) },
+                { key: '湿度', cells: v.relative_humidity_2m.map(humidityCell) },
+                { key: '気圧', cells: pressureCells(v.pressure_msl, stepHours) }
+            ];
+        }
+        
+        // 気象庁の週間予報の表
+        function weeklyRows(weekly) {
+            const range = (lower, upper) => lower && upper ? `<div class="range">${lower}〜${upper}</div>` : '';
+            return [
+                { key: '日付', cells: weekly.days.map(d => formatDateLabel(d.time)) },
+                { key: '天気', cells: weekly.days.map((d) => {
+                    const telop = weatherTelop(d.weatherCode);
+                    if (!telop) return '−';
+                    return `<img src="${telop.icon}" alt="${telop.text}" loading="lazy">`
+                        + `<div class="telop">${telop.text}</div>`;
+                }) },
+                { key: '降水確率', cells: weekly.days.map(d => d.pop === '' ? '−' : d.pop) },
+                { key: '信頼度', cells: weekly.days.map(d => d.reliability || '−') },
+                { key: '最高気温', cells: weekly.days.map(d => (d.tempMax || '−') + range(d.tempMaxLower, d.tempMaxUpper)) },
+                { key: '最低気温', cells: weekly.days.map(d => (d.tempMin || '−') + range(d.tempMinLower, d.tempMinUpper)) }
+            ];
+        }
+        
+        function showForecastError(sectionId, message) {
+            const section = document.getElementById(sectionId);
+            section.hidden = false;
+            section.querySelector('.table-container').innerHTML = `<p class="forecast-error">${message}</p>`;
+        }
+        
+        // ピンが変わるたびに取得し直す。古い応答は捨てる
+        let forecastToken = 0;
+        async function updateForecast(pin) {
+            const token = ++forecastToken;
+            const sections = ['forecast-msm', 'forecast-jma', 'forecast-aifs'];
+            document.getElementById('forecast-hint').hidden = !!pin;
+            if (!pin) {
+                sections.forEach(id => { document.getElementById(id).hidden = true; });
+                return;
+            }
+            
+            Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(([forecast, baseTime]) => {
+                if (token !== forecastToken) return;
+                // 1時間予測は、雲量地図と同じ計算の範囲（基準時刻以降）だけを出す。
+                // それより前の時刻は前の計算の値で、地図では選べないため
+                const sections = [
+                    ['forecast-msm', trimSeriesBefore(forecast.msm, baseTime), 1],
+                    ['forecast-aifs', forecast.aifs, 6]
+                ];
+                for (const [id, series, stepHours] of sections) {
+                    const section = document.getElementById(id);
+                    section.hidden = false;
+                    const container = section.querySelector('.table-container');
+                    container.innerHTML = '<table></table>';
+                    renderTable(container.firstChild, forecastRows(series, stepHours), series.times);
+                    markPastCells();
+                    scrollToCurrentColumn(container);
+                }
+                highlightForecastTime(document.getElementById('time-select').value);
+            }).catch((error) => {
+                if (token !== forecastToken) return;
+                console.error('Failed to load point forecast:', error);
+                showForecastError('forecast-msm', '予測値を取得できませんでした。');
+                showForecastError('forecast-aifs', '予測値を取得できませんでした。');
+            });
+            
+            loadJmaWeekly(pin.lat, pin.lng).then((weekly) => {
+                if (token !== forecastToken) return;
+                const section = document.getElementById('forecast-jma');
+                section.hidden = false;
+                section.querySelector('.table-container').innerHTML = '<table></table>';
+                renderTable(section.querySelector('table'), weeklyRows(weekly), null);
+                const report = utcToJSTStringForSelect(weekly.reportDatetime);
+                document.getElementById('jma-meta').textContent =
+                    `${weekly.area.officeName} ${weekly.areaName}の予報（気温は${weekly.tempAreaName}）。${report} 発表。`;
+            }).catch((error) => {
+                if (token !== forecastToken) return;
+                console.error('Failed to load JMA weekly forecast:', error);
+                showForecastError('forecast-jma', '気象庁の週間予報を取得できませんでした。');
+            });
+        }
+        
+        // 雲量地図で選んでいる時刻の列を赤線で囲み、その列まで横スクロールする。
+        // 同じMSMの同じ時刻である1時間予測だけが対象（2週間予測は別のモデル）
+        function highlightForecastTime(utcTime) {
+            // プルダウンがまだ「データ取得中...」のときは時刻として解釈できない
+            const date = utcTime ? new Date(utcTime) : null;
+            const key = date && !Number.isNaN(date.getTime()) ? jstKey(date) : null;
+            const container = document.querySelector('#forecast-msm .table-container');
+            if (!container) return;
+            
+            container.querySelectorAll('td').forEach((td) => {
+                td.classList.toggle('pin-time', !!key && td.dataset.time === key);
+            });
+            
+            // 赤線の列が画面の外にあるときだけ、その列が見えるところまで横に動かす
+            const cell = container.querySelector('td.pin-time');
+            if (!cell) return;
+            const labelWidth = container.querySelector('th')?.offsetWidth || 0;
+            const left = cell.offsetLeft - labelWidth;
+            const right = left + cell.offsetWidth;
+            const visibleWidth = container.clientWidth - labelWidth;
+            if (left < container.scrollLeft || right > container.scrollLeft + visibleWidth) {
+                container.scrollLeft = Math.max(0, cell.offsetLeft - labelWidth - 40);
+            }
+        }
+        
+        // 現在の列の1つ前が左端に来るところまで横スクロールする（表を作り直したときだけ）
+        function scrollToCurrentColumn(container) {
+            const cells = [...container.querySelectorAll('tr[data-key="時刻"] td[data-time]')];
+            if (cells.length === 0) return;
+            const liveIndex = cells.findIndex(td => !td.classList.contains('past'));
+            const target = cells[liveIndex < 0 ? cells.length - 1 : Math.max(0, liveIndex - 1)];
+            const labelWidth = container.querySelector('th')?.offsetWidth || 0;
+            container.scrollLeft = Math.max(0, target.offsetLeft - labelWidth);
+        }
+        
+        // 過ぎた時刻のセルに .past を付ける。
+        // セルは「その時刻から次の列の時刻まで」を表すので、9:55 なら 9時のセルはまだ過ぎていない
+        function markPastCells() {
+            const now = Date.now();
+            document.querySelectorAll('.table-container table[data-step-minutes]').forEach((table) => {
+                const stepMs = Number(table.dataset.stepMinutes) * 60000;
+                table.querySelectorAll('td[data-time]').forEach((td) => {
+                    const end = new Date(`${td.dataset.time}:00+09:00`).getTime() + stepMs;
+                    td.classList.toggle('past', end <= now);
+                });
+            });
+        }
+        
+        // 「i」の説明を、押したボタンの真下に吹き出しとして出す
+        function initInfoPopovers() {
+            const supported = 'popover' in HTMLElement.prototype;
+            document.querySelectorAll('[popovertarget]').forEach((button) => {
+                const popover = document.getElementById(button.getAttribute('popovertarget'));
+                if (!supported) {
+                    // 対応していないブラウザでは見出しの下に開く
+                    button.addEventListener('click', () => popover.classList.toggle('open'));
+                    return;
+                }
+                
+                const place = () => {
+                    const rect = button.getBoundingClientRect();
+                    const width = popover.offsetWidth;
+                    const left = Math.min(Math.max(10, rect.left - 20), window.innerWidth - width - 10);
+                    popover.style.left = `${left}px`;
+                    popover.style.top = `${rect.bottom + 8}px`;
+                    popover.style.setProperty('--arrow-x', `${rect.left + rect.width / 2 - left - 7}px`);
+                };
+                popover.addEventListener('toggle', (e) => {
+                    if (e.newState === 'open') place();
+                });
+                const reposition = () => {
+                    if (popover.matches(':popover-open')) place();
+                };
+                window.addEventListener('scroll', reposition, { passive: true });
+                window.addEventListener('resize', reposition);
+            });
+        }
+        
+        // 検索欄の開閉（畳むと虫眼鏡ボタンだけになる）
+        function setSearchCollapsed(collapsed) {
+            const panel = document.querySelector('.point-panel');
+            panel.classList.toggle('search-collapsed', collapsed);
+            document.getElementById('search-toggle-btn').setAttribute('aria-expanded', String(!collapsed));
         }
         
         // 操作パネルの「📍地点名 上12 / 中40 / 下80%」
@@ -851,21 +1570,57 @@
             document.getElementById('pin-name').textContent = `📍${pin.name}`;
             document.getElementById('pin-name').title = pin.name;
             const values = cloudSource ? cloudSource.valueAt(pin.lat, pin.lng) : undefined;
-            let text = '';
+            let html = '';
             if (values === null) {
-                text = '範囲外';
+                html = '<span class="layer">範囲外</span>';
             } else if (values) {
                 const fmt = (v) => v === null ? '−' : String(v);
-                text = `上${fmt(values.upper)} / 中${fmt(values.middle)} / 下${fmt(values.lower)}%`;
+                const cell = (label, v) => `<span class="layer">${label}</span><b>${fmt(v)}</b>`;
+                html = mapView === 'total'
+                    ? cell('全雲量', values.total)
+                    : [cell('上', values.upper), cell('中', values.middle), cell('下', values.lower)].join(' ');
+                html += '<span class="unit">%</span>';
             }
-            document.getElementById('pin-values').textContent = text;
+            document.getElementById('pin-values').innerHTML = html;
+        }
+        
+        // 雲量の地図の表示を切り替える（total: 総雲量1枚 / layers: 上中下層の3枚）
+        function setMapView(view) {
+            mapView = view;
+            document.getElementById('maps-container').dataset.view = view;
+            document.querySelectorAll('.layer-tab').forEach((tab) => {
+                tab.setAttribute('aria-selected', String(tab.dataset.view === view));
+            });
+            // 隠れていた地図は大きさを持っていないので測り直す
+            Object.values(maps).forEach((map) => map.invalidateSize());
+            updatePinInfo();
+        }
+        
+        function initMapViewTabs() {
+            const pcMedia = window.matchMedia(PC_MEDIA);
+            let chosenByUser = false;
+            
+            // 既定はPCが上中下層、スマホが全体。ユーザーが選ぶまでは画面幅に追従する
+            setMapView(pcMedia.matches ? 'layers' : 'total');
+            pcMedia.addEventListener('change', (e) => {
+                if (!chosenByUser) setMapView(e.matches ? 'layers' : 'total');
+            });
+            
+            document.querySelectorAll('.layer-tab').forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    chosenByUser = true;
+                    setMapView(tab.dataset.view);
+                });
+            });
         }
         
         // ピン（クリック/長押しで置く・ドラッグで動かす・検索で置く）
         function initPin() {
-            pinController = new PinController(maps, () => {
+            pinController = new PinController(maps, (pin) => {
+                setSearchCollapsed(!!pin);
                 updatePinInfo();
                 refreshTimeLabels();
+                updateForecast(pin);
                 updateUrl(maps.lower.getCenter(), maps.lower.getZoom());
             });
             
@@ -876,27 +1631,23 @@
             
             document.getElementById('pin-clear-btn').addEventListener('click', () => pinController.clear());
             
-            // スマホは🔍ボタンで検索欄を開閉する
-            const form = document.getElementById('search-form');
-            const toggle = document.getElementById('search-toggle-btn');
-            const input = document.getElementById('search-input');
-            toggle.addEventListener('click', () => {
-                const open = form.classList.toggle('open');
-                toggle.setAttribute('aria-expanded', String(open));
-                if (open) input.focus();
+            // ピンが決まっている間、検索欄は虫眼鏡ボタンに畳んでおく
+            const searchInput = document.getElementById('search-input');
+            document.getElementById('search-toggle-btn').addEventListener('click', () => {
+                setSearchCollapsed(false);
+                searchInput.focus();
             });
             
+            // 場所検索（地図の下。雲量地図の表示には要らないので上部には置かない）
             setupSearch(
                 {
-                    form,
-                    input,
+                    form: document.getElementById('search-form'),
+                    input: document.getElementById('search-input'),
                     list: document.getElementById('search-results'),
                     status: document.getElementById('search-status')
                 },
                 () => maps.lower.getCenter(),
                 (lat, lng, name) => {
-                    form.classList.remove('open');
-                    toggle.setAttribute('aria-expanded', 'false');
                     pinController.set(lat, lng, name);
                     maps.lower.setView([lat, lng], maps.lower.getZoom());
                 }
@@ -912,9 +1663,17 @@
                 titleLink.href = baseUrl;
             }
             
-            // まずマップを初期化
+            // まずマップを初期化。
+            // タブの初期化は地図の大きさを測り直して moveend を起こすので、
+            // URL のピンを読み終えてから行う（先にやると URL が書き換わって pin が消える）
             initMaps();
             initPin();
+            initMapViewTabs();
+            
+            initInfoPopovers();
+            
+            // 時間の経過で「過ぎた時刻」が増えるので、定期的に付け直す
+            setInterval(markPastCells, 60 * 1000);
             
             cloudSource = await createMsmSource(updatePinInfo);
             
@@ -924,6 +1683,8 @@
             } catch (error) {
                 console.error('Failed to load cloud data index:', error);
             }
+            
+            resolveCloudBaseTime(index ? index.baseTime : null);
             
             if (index) {
                 setupTimeSelect(index);
@@ -935,6 +1696,7 @@
                 
                 timeSelect.addEventListener('change', function() {
                     cloudSource.show(this.value);
+                    highlightForecastTime(this.value);
                 });
                 
                 // 前の時刻に移動
@@ -959,6 +1721,7 @@
                 setTimeout(() => {
                     if (timeSelect.value) {
                         cloudSource.show(timeSelect.value);
+                        highlightForecastTime(timeSelect.value);
                     }
                 }, 200);
             }

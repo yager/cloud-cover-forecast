@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="292" viewBox="0 0 720 292" font-family="sans-serif">
+<rect width="720" height="292" fill="#ffffff"/>
+<text x="12" y="31.0" font-size="12" fill="#333">雲量（％）</text>
+<rect x="162" y="12" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="194.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">20未満</text>
+<rect x="230" y="12" width="64" height="30" fill="#eeeeee" stroke="#ccc"/>
+<text x="262.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">20</text>
+<rect x="298" y="12" width="64" height="30" fill="#d8d8d8" stroke="#ccc"/>
+<text x="330.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">40</text>
+<rect x="366" y="12" width="64" height="30" fill="#c0c0c0" stroke="#ccc"/>
+<text x="398.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">60</text>
+<rect x="434" y="12" width="64" height="30" fill="#a8a8a8" stroke="#ccc"/>
+<text x="466.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">80</text>
+<rect x="502" y="12" width="64" height="30" fill="#909090" stroke="#ccc"/>
+<text x="534.0" y="31.0" font-size="12" fill="#333" text-anchor="middle">100</text>
+<text x="12" y="65.0" font-size="12" fill="#333">降水量（mm/h）</text>
+<rect x="162" y="46" width="64" height="30" fill="#eef6ff" stroke="#ccc"/>
+<text x="194.0" y="65.0" font-size="12" fill="#333" text-anchor="middle">0.1</text>
+<rect x="230" y="46" width="64" height="30" fill="#d3e8ff" stroke="#ccc"/>
+<text x="262.0" y="65.0" font-size="12" fill="#333" text-anchor="middle">1</text>
+<rect x="298" y="46" width="64" height="30" fill="#a8d2ff" stroke="#ccc"/>
+<text x="330.0" y="65.0" font-size="12" fill="#333" text-anchor="middle">5</text>
+<rect x="366" y="46" width="64" height="30" fill="#6fb0f5" stroke="#ccc"/>
+<text x="398.0" y="65.0" font-size="12" fill="#333" text-anchor="middle">10</text>
+<rect x="434" y="46" width="64" height="30" fill="#2f7fd6" stroke="#ccc"/>
+<text x="466.0" y="65.0" font-size="12" fill="#fff" text-anchor="middle">20</text>
+<rect x="502" y="46" width="64" height="30" fill="#ff9900" stroke="#ccc"/>
+<text x="534.0" y="65.0" font-size="12" fill="#333" text-anchor="middle">30</text>
+<rect x="570" y="46" width="64" height="30" fill="#ff2800" stroke="#ccc"/>
+<text x="602.0" y="65.0" font-size="12" fill="#fff" text-anchor="middle">50</text>
+<rect x="638" y="46" width="64" height="30" fill="#b40068" stroke="#ccc"/>
+<text x="670.0" y="65.0" font-size="12" fill="#fff" text-anchor="middle">80</text>
+<text x="12" y="99.0" font-size="12" fill="#333">風（m/s）</text>
+<rect x="162" y="80" width="64" height="30" fill="#eeffee" stroke="#ccc"/>
+<text x="194.0" y="99.0" font-size="12" fill="#333" text-anchor="middle">5</text>
+<rect x="230" y="80" width="64" height="30" fill="#ccffcc" stroke="#ccc"/>
+<text x="262.0" y="99.0" font-size="12" fill="#333" text-anchor="middle">10</text>
+<rect x="298" y="80" width="64" height="30" fill="#aaffaa" stroke="#ccc"/>
+<text x="330.0" y="99.0" font-size="12" fill="#333" text-anchor="middle">15</text>
+<rect x="366" y="80" width="64" height="30" fill="#99ff99" stroke="#ccc"/>
+<text x="398.0" y="99.0" font-size="12" fill="#333" text-anchor="middle">20</text>
+<rect x="434" y="80" width="64" height="30" fill="#77ff77" stroke="#ccc"/>
+<text x="466.0" y="99.0" font-size="12" fill="#333" text-anchor="middle">25</text>
+<text x="12" y="133.0" font-size="12" fill="#333">湿度（％）</text>
+<rect x="162" y="114" width="64" height="30" fill="#f6efe2" stroke="#ccc"/>
+<text x="194.0" y="133.0" font-size="12" fill="#333" text-anchor="middle">30以下</text>
+<rect x="230" y="114" width="64" height="30" fill="#e6ddf5" stroke="#ccc"/>
+<text x="262.0" y="133.0" font-size="12" fill="#333" text-anchor="middle">80</text>
+<rect x="298" y="114" width="64" height="30" fill="#c3b2e6" stroke="#ccc"/>
+<text x="330.0" y="133.0" font-size="12" fill="#333" text-anchor="middle">90</text>
+<rect x="366" y="114" width="64" height="30" fill="#9b86d6" stroke="#ccc"/>
+<text x="398.0" y="133.0" font-size="12" fill="#fff" text-anchor="middle">100</text>
+<text x="12" y="167.0" font-size="12" fill="#333">気温（℃・文字色）</text>
+<rect x="162" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="194.0" y="167.0" font-size="12" fill="#0d47a1" text-anchor="middle">-5未満</text>
+<rect x="230" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="262.0" y="167.0" font-size="12" fill="#1565c0" text-anchor="middle">0未満</text>
+<rect x="298" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="330.0" y="167.0" font-size="12" fill="#4a86c5" text-anchor="middle">5未満</text>
+<rect x="366" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="398.0" y="167.0" font-size="12" fill="#333333" text-anchor="middle">5〜25</text>
+<rect x="434" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="466.0" y="167.0" font-size="12" fill="#c77700" text-anchor="middle">25以上</text>
+<rect x="502" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="534.0" y="167.0" font-size="12" fill="#d95926" text-anchor="middle">30以上</text>
+<rect x="570" y="148" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="602.0" y="167.0" font-size="12" fill="#c62828" text-anchor="middle">35以上</text>
+<text x="12" y="201.0" font-size="12" fill="#333">気圧 低下（hPa）</text>
+<rect x="162" y="182" width="64" height="30" fill="#fbe8f0" stroke="#ccc"/>
+<text x="194.0" y="201.0" font-size="12" fill="#333" text-anchor="middle">-2</text>
+<rect x="230" y="182" width="64" height="30" fill="#f3b6d1" stroke="#ccc"/>
+<text x="262.0" y="201.0" font-size="12" fill="#333" text-anchor="middle">-4</text>
+<rect x="298" y="182" width="64" height="30" fill="#e58ab5" stroke="#ccc"/>
+<text x="330.0" y="201.0" font-size="12" fill="#333" text-anchor="middle">-6</text>
+<text x="12" y="235.0" font-size="12" fill="#333">気圧 上昇（hPa）</text>
+<rect x="162" y="216" width="64" height="30" fill="#e3edf6" stroke="#ccc"/>
+<text x="194.0" y="235.0" font-size="12" fill="#333" text-anchor="middle">+2</text>
+<rect x="230" y="216" width="64" height="30" fill="#b9d3ec" stroke="#ccc"/>
+<text x="262.0" y="235.0" font-size="12" fill="#333" text-anchor="middle">+4</text>
+<rect x="298" y="216" width="64" height="30" fill="#8fb8e0" stroke="#ccc"/>
+<text x="330.0" y="235.0" font-size="12" fill="#333" text-anchor="middle">+6</text>
+<text x="12" y="269.0" font-size="12" fill="#333">過ぎた時間</text>
+<rect x="162" y="250" width="64" height="30" fill="#ffffff" stroke="#ccc"/>
+<text x="194.0" y="269.0" font-size="12" fill="#cccccc" text-anchor="middle">過去</text>
+</svg>

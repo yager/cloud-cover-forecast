@@ -17,6 +17,7 @@ export const GRID_BOUNDS = [
 ];
 
 export const LEVEL_VARIABLES = {
+    total: 'cloud_cover',
     lower: 'cloud_cover_low',
     middle: 'cloud_cover_mid',
     upper: 'cloud_cover_high'
