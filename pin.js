@@ -13,8 +13,8 @@ const DECIMAL_PLACES = 5;
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_TOLERANCE_PX = 10;
 
-// 住所検索の addressCode 先頭2桁 → 都道府県
-const PREFECTURES = [
+// 市区町村コード・addressCode の先頭2桁 → 都道府県（逆ジオコーディングでも使う）
+export const PREFECTURES = [
     '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
     '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
     '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
@@ -265,6 +265,12 @@ export class PinController {
         this.pin = null;
         this._render();
         this.onChange(null);
+    }
+
+    // 表示名だけ差し替える。座標は変わらないので予測は取り直さない（逆ジオコーディングの結果を後から当てる用）
+    rename(name) {
+        if (!this.pin) return;
+        this.pin.name = name;
     }
 
     _render() {

@@ -5,6 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>雲量予測 - Cloud Cover Forecast</title>
     
+    <!-- 検索結果・SNSでの見え方。og:image は絶対URLでないと読まないクローラーがある -->
+    <meta name="description" content="気象庁MSMの雲量を地図に描き、地点ごとの気温・雨・風の見通しをまとめて確認できます。">
+    <link rel="canonical" href="https://yager.github.io/cloud-cover-forecast/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="雲量予測">
+    <meta property="og:locale" content="ja_JP">
+    <meta property="og:url" content="https://yager.github.io/cloud-cover-forecast/">
+    <meta property="og:title" content="雲量予測 - Cloud Cover Forecast">
+    <meta property="og:description" content="気象庁MSMの雲量を地図に描き、地点ごとの気温・雨・風の見通しをまとめて確認できます。">
+    <meta property="og:image" content="https://yager.github.io/cloud-cover-forecast/icons/ccf-ogimage.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="日本付近の雲量を描いた地図と「雲量予測」のロゴ">
+    <meta name="twitter:card" content="summary_large_image">
+    
+    <!-- ファビコンとアプリアイコン。icon.svg は中で prefers-color-scheme を見て明暗を切り替える。
+         favicon.ico は SVG を読めない環境向けの控え -->
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#e8edf0">
+    
     <!-- Webフォント: 本文=Zen Kaku Gothic New / 数字=Roboto Condensed / ロゴ=Zen Maru Gothic（ロゴは使う4文字だけ取得） -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,6 +98,16 @@
         }
         
         /* ヘッダーとフッターは全幅の帯。幅を決めているのは雲量の地図だけ */
+        /* 圏外になったときに、表示中のデータがいつ取得したものかを知らせる */
+        .offline-banner {
+            padding: 6px 10px;
+            background: #fff4e0;
+            border-bottom: 1px solid #e8c98a;
+            color: #6b4a12;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        
         .site-header {
             width: 100%;
             padding: 10px;
@@ -99,8 +133,17 @@
         }
         
         #title-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
             text-decoration: none;
             color: #333;
+        }
+        
+        /* ロゴは見出しの文字サイズに追従させる。見出しに文字があるので alt は空 */
+        #title-logo {
+            height: 1.1em;
+            width: auto;
         }
         
         #update-time {
@@ -275,6 +318,27 @@
             background: white;
             cursor: pointer;
         }
+        .gps-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 30px;
+            padding: 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            color: #333;
+            cursor: pointer;
+        }
+        .gps-btn:hover {
+            background: #f0f0f0;
+        }
+        .gps-btn:disabled {
+            opacity: 0.5;
+            cursor: progress;
+        }
+        
         .search-status {
             width: 100%;
             font-size: 12px;
@@ -688,8 +752,19 @@
             image-rendering: pixelated;
         }
         
-        /* 白地図レイヤーを階調逆転 */
-        .inverted-blank-tile {
+        /* 下地レイヤー用のペイン。雲量レイヤーとは分けてあるので、フィルタが雲に掛からない。
+           陰影起伏図・白地図とも海域は透過なので、この背景色が海の色になる */
+        .base-dark-pane {
+            background: #000;
+        }
+        
+        /* 陰影起伏図を暗く落として下地にする。無彩色なので雲の色と競合しない */
+        .hillshade-dark-tile {
+            filter: brightness(0.30) contrast(1.3);
+        }
+        
+        /* 白地図を階調逆転し、海岸線・行政界・県名だけを白く残す（黒い部分は lighten で消える） */
+        .blank-line-tile {
             filter: invert(1);
             mix-blend-mode: lighten;
         }
@@ -800,7 +875,7 @@
 <body>
     <header class="site-header">
         <div class="site-header-title">
-            <h1><a id="title-link" href="https://yager.github.io/cloud-cover-forecast/">雲量予測</a></h1>
+            <h1><a id="title-link" href="https://yager.github.io/cloud-cover-forecast/"><img id="title-logo" src="icons/logo.svg" width="700" height="550" alt="">雲量予測</a></h1>
             <div id="update-time">データ取得中...</div>
         </div>
         <div class="time-select-container">
@@ -811,6 +886,8 @@
             <button id="time-next-btn" class="time-select-btn" type="button">▶︎</button>
         </div>
     </header>
+    
+    <p id="offline-banner" class="offline-banner" hidden></p>
     
     <main id="content">
         <div class="maps-panel">
@@ -839,6 +916,13 @@
         <form id="search-form" class="search-form" role="search">
             <input id="search-input" class="search-input" type="search" placeholder="地名・住所・緯度経度" enterkeyhint="search" autocomplete="off">
             <button class="search-submit" type="submit">検索</button>
+            <button id="gps-btn" class="gps-btn" type="button" aria-label="現在地にピンを立てる" title="現在地にピンを立てる">
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <circle cx="8" cy="8" r="3.2"></circle>
+                    <circle cx="8" cy="8" r="0.6" fill="currentColor"></circle>
+                    <path d="M8 .9v2.5M8 12.6v2.5M.9 8h2.5M12.6 8h2.5" stroke-linecap="round"></path>
+                </svg>
+            </button>
             <p id="search-status" class="search-status" hidden></p>
             <ul id="search-results" class="search-results" hidden></ul>
         </form>
@@ -848,7 +932,7 @@
             <span id="pin-values" class="pin-values"></span>
         </div>
         <button id="search-toggle-btn" class="search-toggle-btn" type="button" aria-label="地点を変更" title="地点を変更" aria-controls="search-form" aria-expanded="false">🔍</button>
-        <p id="forecast-hint" class="forecast-hint">地点にピンを立てると、その地点の予測を表示します（PCはクリック、スマホは長押し、または上の検索）。</p>
+        <p id="forecast-hint" class="forecast-hint">地点にピンを立てると、その地点の予測を表示します（PCはクリック、スマホは長押し、または上の検索・現在地）。</p>
     </div>
     
     <section id="forecast-msm" class="forecast forecast-model" hidden>
@@ -914,7 +998,7 @@
         import { PinController, setupSearch, formatLatLng } from './pin.js';
         import {
             loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
-            jstKey, formatDateLabel, formatHourLabel
+            reverseGeocodeAddress, jstKey, formatDateLabel, formatHourLabel
         } from './weather.js';
         
         // マップオブジェクト
@@ -939,6 +1023,10 @@
         
         // 日の出・日の入りを計算する既定の地点（ピンが無いとき）
         const DEFAULT_SUN_POINT = { lat: 35.844535, lng: 139.746094 };
+        
+        // パラメータなしで開いたか。自動で現在地を取るかの判定に使う。
+        // updateUrl が lat/lng/z を書き込むので、ここで先に確定させておく必要がある
+        const OPENED_WITHOUT_PARAMS = window.location.search === '';
         
         // URLパラメータを読み取る関数
         function getUrlParams() {
@@ -1006,14 +1094,33 @@
             
             Object.values(maps).forEach((map) => map.setView(initialCenter, initialZoom));
             
-            // 国土地理院の地図タイルを各マップに追加（写真地図を使用）
-            const baseTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg';
-            const blankTileUrl = 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png';
+            // 国土地理院の陰影起伏図を暗く落とした下地に、白地図の輪郭線を重ねる。
+            // 地名などの文字情報を減らし、起伏と県の輪郭だけが分かる状態にしている。
+            // 無彩色にしてあるのは、下地の色が雲量の色と競合しないようにするため。
+            // native ズームは地理院タイルの提供範囲（陰影起伏図 2〜16、白地図 5〜14）。
+            // 範囲外のズームでは端のタイルを拡大・縮小して使う（指定しないと 404 になる）
+            const BASE_TILES = [
+                { url: 'https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png', minNativeZoom: 2, maxNativeZoom: 16, className: 'hillshade-dark-tile' },
+                { url: 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png', minNativeZoom: 5, maxNativeZoom: 14, className: 'blank-line-tile' }
+            ];
             
-            // 背景（写真地図）と、階調を反転した白地図を各地図に重ねる
             for (const map of Object.values(maps)) {
-                L.tileLayer(baseTileUrl, { maxZoom: 18 }).addTo(map);
-                L.tileLayer(blankTileUrl, { maxZoom: 18, className: 'inverted-blank-tile' }).addTo(map);
+                // 雲量レイヤー（既定の tilePane、z-index 200）より下に敷く
+                const pane = map.createPane('baseDark');
+                pane.classList.add('base-dark-pane');
+                pane.style.zIndex = '199';
+                for (const tile of BASE_TILES) {
+                    L.tileLayer(tile.url, {
+                        pane: 'baseDark',
+                        className: tile.className,
+                        // CORS で取ると Service Worker が中身を見られる。
+                        // 素の img のままだと不透明な応答になり、保存容量が実際よりはるかに大きく計上される
+                        crossOrigin: 'anonymous',
+                        maxZoom: 18,
+                        minNativeZoom: tile.minNativeZoom,
+                        maxNativeZoom: tile.maxNativeZoom
+                    }).addTo(map);
+                }
             }
             
             // 各マップにラベルを追加（右上）
@@ -1240,6 +1347,7 @@
                     // 読み込み中に別の時刻が選ばれていたら捨てる
                     if (requestedTime !== time) return;
                     currentFrame = frame;
+                    markDataFetched();
                     Object.keys(maps).forEach((type) => layers[type].setValues(frame[type]));
                     onFrame();
                     
@@ -1420,6 +1528,9 @@
         function showForecastError(sectionId, message) {
             const section = document.getElementById(sectionId);
             section.hidden = false;
+            // 前の地点の補足情報（週間予報の予報区と発表時刻）が残らないように消す
+            const meta = section.querySelector('.forecast-meta');
+            if (meta) meta.textContent = '';
             section.querySelector('.table-container').innerHTML = `<p class="forecast-error">${message}</p>`;
         }
         
@@ -1436,6 +1547,7 @@
             
             Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(([forecast, baseTime]) => {
                 if (token !== forecastToken) return;
+                markDataFetched();
                 // 1時間予測は、雲量地図と同じ計算の範囲（基準時刻以降）だけを出す。
                 // それより前の時刻は前の計算の値で、地図では選べないため
                 const sections = [
@@ -1614,7 +1726,85 @@
             });
         }
         
-        // ピン（クリック/長押しで置く・ドラッグで動かす・検索で置く）
+        // 現在地の取得に失敗したときの文言
+        const GEOLOCATION_ERRORS = {
+            1: '位置情報の利用が許可されていません。ブラウザの設定から許可してください。',
+            2: '現在地を取得できませんでした。',
+            3: '現在地の取得に時間がかかっています。もう一度お試しください。'
+        };
+        
+        // GPS で現在地を取り、そこにピンを立てる。
+        // auto = ページを開いたときの自動取得。断られても黙って何もしない（ボタン操作のときだけ理由を出す）
+        function locateAndSetPin({ auto = false } = {}) {
+            const button = document.getElementById('gps-btn');
+            const status = document.getElementById('search-status');
+            const showStatus = (text) => {
+                status.textContent = text;
+                status.hidden = !text;
+            };
+            
+            button.disabled = true;
+            showStatus('現在地を取得しています…');
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    button.disabled = false;
+                    showStatus('');
+                    const { latitude, longitude } = position.coords;
+                    // まず座標のまま置き、住所が分かったら表示名だけ差し替える
+                    pinController.set(latitude, longitude, `現在地（${formatLatLng(latitude, longitude)}）`);
+                    maps.lower.setView([latitude, longitude], maps.lower.getZoom());
+                    nameCurrentLocation(latitude, longitude);
+                },
+                (error) => {
+                    button.disabled = false;
+                    showStatus(auto ? '' : (GEOLOCATION_ERRORS[error.code] || '現在地を取得できませんでした。'));
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60 * 1000 }
+            );
+        }
+        
+        // 現在地のピンの表示名を「現在地（都道府県市区町村）」にする。
+        // 逆ジオコーディングの待ち時間ぶん遅れて届くので、その間にピンが動いていたら何もしない
+        async function nameCurrentLocation(lat, lng) {
+            let address = null;
+            try {
+                address = await reverseGeocodeAddress(lat, lng);
+            } catch (error) {
+                console.warn('逆ジオコーディングに失敗しました', error);
+            }
+            
+            const pin = pinController && pinController.pin;
+            if (!address || !pin || pin.lat !== lat || pin.lng !== lng) return;
+            
+            pinController.rename(`現在地（${address}）`);
+            updatePinInfo();
+            updateUrl(maps.lower.getCenter(), maps.lower.getZoom());
+        }
+        
+        // データを最後に取得できた時刻。オフラインになったときに「いつの値か」を出すために持つ。
+        // 予測データはキャッシュしていないので、これはこのセッションで読み込んだ分を指す
+        let lastDataFetchedAt = null;
+        
+        function markDataFetched() {
+            lastDataFetchedAt = new Date();
+            updateOfflineBanner();
+        }
+        
+        function updateOfflineBanner() {
+            const banner = document.getElementById('offline-banner');
+            if (navigator.onLine) {
+                banner.hidden = true;
+                return;
+            }
+            const d = lastDataFetchedAt;
+            banner.textContent = d
+                ? `オフラインです。表示中のデータは ${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')} に取得したものです。`
+                : 'オフラインです。データを取得できません。';
+            banner.hidden = false;
+        }
+        
+        // ピン（クリック/長押しで置く・ドラッグで動かす・検索で置く・現在地で置く）
         function initPin() {
             pinController = new PinController(maps, (pin) => {
                 setSearchCollapsed(!!pin);
@@ -1630,6 +1820,14 @@
             }
             
             document.getElementById('pin-clear-btn').addEventListener('click', () => pinController.clear());
+            
+            // 現在地ボタン。geolocation は https か localhost でしか使えないので、無ければボタンごと隠す
+            const gpsButton = document.getElementById('gps-btn');
+            if (navigator.geolocation) {
+                gpsButton.addEventListener('click', () => locateAndSetPin());
+            } else {
+                gpsButton.hidden = true;
+            }
             
             // ピンが決まっている間、検索欄は虫眼鏡ボタンに畳んでおく
             const searchInput = document.getElementById('search-input');
@@ -1670,7 +1868,24 @@
             initPin();
             initMapViewTabs();
             
+            // パラメータなしで開いたときは、現在地を自動で取ってピンを立てる。
+            // 共有された URL（ピンや地図の位置つき）で開いた場合は、その指定を優先して何もしない
+            if (OPENED_WITHOUT_PARAMS && navigator.geolocation) {
+                locateAndSetPin({ auto: true });
+            }
+            
             initInfoPopovers();
+            
+            window.addEventListener('online', updateOfflineBanner);
+            window.addEventListener('offline', updateOfflineBanner);
+            updateOfflineBanner();
+            
+            // PWA としてインストールできるようにする。失敗してもページの動作には影響しない
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js').catch((error) => {
+                    console.warn('Service Worker の登録に失敗しました', error);
+                });
+            }
             
             // 時間の経過で「過ぎた時刻」が増えるので、定期的に付け直す
             setInterval(markPastCells, 60 * 1000);

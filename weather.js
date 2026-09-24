@@ -5,6 +5,8 @@
 //
 // 数値計算の結果と気象庁の予報は性質が違うので、表示側でも別の節に分けている。
 
+import { PREFECTURES } from './pin.js';
+
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 
 // 国土地理院の逆ジオコーダ（緯度経度 → 市区町村コード）
@@ -238,14 +240,60 @@ export function weatherTelop(code) {
 }
 
 // 緯度経度 → 気象庁の府県予報区と一次細分区域
+// 緯度経度 → 市区町村コード（海上や国外では null）
+async function reverseGeocodeMuniCode(lat, lng) {
+    const res = await fetch(`${GSI_REVERSE_URL}?lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}`);
+    const json = await res.json();
+    const muniCode = String(json?.results?.muniCd || '');
+    return muniCode ? muniCode.padStart(5, '0') : null;
+}
+
+// 気象庁の地域一覧は 200KB 近くあり、地名の解決と週間予報の両方で使うので一度だけ読む
+let areaPromise = null;
+function loadJmaAreas() {
+    if (!areaPromise) {
+        areaPromise = fetch(JMA_AREA_URL).then((res) => res.json());
+        areaPromise.catch(() => { areaPromise = null; });
+    }
+    return areaPromise;
+}
+
+// 市区町村コード → 気象庁の class20。
+// 気象庁のコードは市区町村コードそのままとは限らず、政令指定都市は区ではなく
+// 市単位（大阪市 2710000）だったり、市を分割した独自区分（横浜市北部 1410011）だったりする。
+// 完全一致で見つからなければ、政令指定都市の区に限り市のコードで前方一致を試す
+function findClass20(area, muniCode) {
+    const exact = area.class20s[muniCode + '00'];
+    if (exact) return exact;
+
+    // 市区町村コードの下3桁が 1xx は政令指定都市の区。市のコードは下1桁または下2桁が 0
+    if (muniCode[2] !== '1') return null;
+    for (const cityCode of [muniCode.slice(0, 4) + '0', muniCode.slice(0, 3) + '00']) {
+        const key = Object.keys(area.class20s).find((k) => k.startsWith(cityCode));
+        if (key) return area.class20s[key];
+    }
+    return null;
+}
+
+// 緯度経度 → 「東京都千代田区」。特定できなければ null（海上・国外・境界未定地域）
+export async function reverseGeocodeAddress(lat, lng) {
+    const muniCode = await reverseGeocodeMuniCode(lat, lng);
+    if (!muniCode) return null;
+
+    const prefecture = PREFECTURES[Number(muniCode.slice(0, 2)) - 1] || '';
+    const area = await loadJmaAreas();
+    // 予報区の名前は「横浜市北部」のように分かれていることがある。住所として出すので方角は落とす
+    const muniName = (findClass20(area, muniCode)?.name || '').replace(/(北|南|東|西|中)部$/, '');
+    const address = `${prefecture}${muniName}`;
+    return address || null;
+}
+
 async function resolveJmaArea(lat, lng) {
-    const revRes = await fetch(`${GSI_REVERSE_URL}?lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}`);
-    const rev = await revRes.json();
-    const muniCode = String(rev?.results?.muniCd || '');
+    const muniCode = await reverseGeocodeMuniCode(lat, lng);
     if (!muniCode) throw new Error('市区町村を特定できませんでした');
 
-    const area = await (await fetch(JMA_AREA_URL)).json();
-    const class20 = area.class20s[muniCode.padStart(5, '0') + '00'];
+    const area = await loadJmaAreas();
+    const class20 = findClass20(area, muniCode);
     const class15 = class20 && area.class15s[class20.parent];
     const class10 = class15 && area.class10s[class15.parent];
     const office = class10 && area.offices[class10.parent];

@@ -1,0 +1,55 @@
+{
+  "name": "雲量予測 - Cloud Cover Forecast",
+  "short_name": "雲量予測",
+  "description": "気象庁MSMの雲量を地図に描き、地点ごとの気温・雨・風の見通しをまとめて確認できます。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#e8edf0",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/ccf-screenshot-pc.jpg",
+      "sizes": "1280x768",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "雲量の地図と1時間予測の表"
+    },
+    {
+      "src": "icons/ccf-screenshot-mobile.jpg",
+      "sizes": "720x1280",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "雲量の地図と1時間予測の表"
+    }
+  ]
+}

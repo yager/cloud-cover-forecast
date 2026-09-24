@@ -25,16 +25,18 @@ export const LEVEL_VARIABLES = {
 
 export const MISSING = 255;
 
-// wxtech タイルと同じ色・同じ区切り（タイル画素と格子値の突き合わせで確認）
+// 雲量の配色。黒い下地に重ねるので、雲が多いほど白く濃くなる。
+// 区切りは 20/40/60/80/100% の5段階で、20%未満と欠測は透明。
+// 濃さはアルファで表すため、レイヤー自体は不透明のまま重ねる
 const COLOR_STEPS = [
-    { min: 100, rgba: [105, 84, 145, 255] },
-    { min: 80, rgba: [106, 126, 155, 255] },
-    { min: 60, rgba: [146, 164, 173, 255] },
-    { min: 40, rgba: [223, 223, 223, 255] },
-    { min: 20, rgba: [239, 239, 239, 255] }
+    { min: 100, rgba: [255, 255, 255, 230] },
+    { min: 80, rgba: [235, 240, 248, 185] },
+    { min: 60, rgba: [210, 222, 238, 140] },
+    { min: 40, rgba: [190, 205, 225, 95] },
+    { min: 20, rgba: [175, 192, 215, 55] }
 ];
 
-// 値(0〜255) → RGBA のルックアップ表。20%未満と欠測は透明
+// 値(0〜255) → RGBA のルックアップ表
 const COLOR_LUT = (() => {
     const lut = new Uint8ClampedArray(256 * 4);
     for (let v = 0; v <= 100; v++) {
@@ -140,8 +142,7 @@ export function gridIndex(lat, lng) {
 // 補間やぼかしは一切しない（数値計算結果をそのまま色分けするだけ）。
 export const CloudGridLayer = L.GridLayer.extend({
     options: {
-        bounds: L.latLngBounds(GRID_BOUNDS),
-        opacity: 0.7
+        bounds: L.latLngBounds(GRID_BOUNDS)
     },
 
     setValues(values) {

@@ -10,7 +10,7 @@
 | 週間予報 | 気象庁 | `https://www.jma.go.jp/bosai/forecast/data/forecast/{府県コード}.json` | 1日3回（5時・11時・17時） |
 | 予報区の特定 | 気象庁 / 国土地理院 | `bosai/common/const/area.json`、`mreversegeocoder.gsi.go.jp` | — |
 | 天気アイコン | 気象庁 | `https://www.jma.go.jp/bosai/forecast/img/{ファイル名}.svg` | — |
-| 地図タイル | 国土地理院 | `cyberjapandata.gsi.go.jp/xyz/seamlessphoto`, `/blank` | — |
+| 地図タイル | 国土地理院 | `cyberjapandata.gsi.go.jp/xyz/hillshademap`（陰影起伏図。CSS で暗く落として下地に）、`/blank`（白地図。階調反転して輪郭線だけを白く） | — |
 | 地名・住所検索 | 国土地理院 | `https://msearch.gsi.go.jp/address-search/AddressSearch` | — |
 
 いずれもブラウザから直接呼べます（CORS 許可を確認済み）。API キーは不要です。
@@ -54,7 +54,7 @@
 - モデルの計算値は「予測」、気象庁の発表は「予報」と呼び分ける。
 - 格子は最近傍で塗り、補間・平滑化をしない。3層を合成した独自の指標（「星が見えるか」など）は作らない。
 - 注意書きはフッターに1か所、各表の「ⓘ」に短く。
-- **例外**: 気温は Open-Meteo の API が地点の標高に合わせて補正した値を使っている（ⓘ に明記）。生の格子値に戻す場合は `elevation=nan` を付ける。
+- 気温は Open-Meteo の API が地点の標高に合わせて補正した値を表示している。補正はデータ提供元が行っているもので、このサイト側では加工していない。何の値かを ⓘ に明記してある。生の格子値に戻す場合は `elevation=nan` を付ける。
 
 ## 検証の記録
 
