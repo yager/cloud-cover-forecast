@@ -89,6 +89,10 @@
             background: var(--content-bg);
         }
 
+        /* 注意: iOS(WebKit)では、枠線のあるボタンで line-height が内容領域の高さを超えると
+           文字が描画されなくなる。box-sizing が border-box なので、枠線1pxのボタンの内容領域は
+           height から2px引いた値になる。ここで指定する line-height を超える高さにするか、
+           .search-submit のように display: flex で中央寄せすること */
         button, select, option, input {
             font-family: inherit;
             font-size: 14px;
@@ -312,14 +316,24 @@
             border-radius: 4px;
         }
         .search-submit {
+            /* flex の既定では縮むので、文字が入りきらなくなるのを防ぐ */
+            flex: 0 0 auto;
+            white-space: nowrap;
+            /* iOS で文字が消えるのを避けるため、行の高さに頼らず flex で中央に置く
+               （◀▶ や現在地のボタンと同じ作り） */
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 0 12px;
             border: 1px solid #ccc;
             border-radius: 4px;
             background: white;
+            color: #333;
             cursor: pointer;
         }
         .gps-btn {
             display: flex;
+            flex: 0 0 auto;
             align-items: center;
             justify-content: center;
             width: 32px;
