@@ -776,6 +776,13 @@
             line-height: 1.5;
         }
         
+        /* 押すとその時刻の雲量地図に切り替わる列。
+           色は変えず、下線だけで押せることを示す（地図にコマがある列にだけ付く） */
+        #forecast-msm tr[data-key="時刻"] td.time-link {
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        
         /* 格子の境界をぼかさない */
         .cloud-grid-tile {
             image-rendering: pixelated;
@@ -1341,6 +1348,9 @@
                 document.getElementById('update-time').innerHTML = 
                     `<strong>基準時刻:</strong> ${jstString} (JST)`;
             }
+            
+            // 表のほうが先にできていることがあるので、ここでも付け直す
+            markSelectableTimes();
         }
         
         // 気象庁MSMの数値計算結果（Open-Meteo の .om）をブラウザで描くソース
@@ -1599,6 +1609,7 @@
                     scrollToCurrentColumn(container);
                 }
                 highlightForecastTime(document.getElementById('time-select').value);
+                markSelectableTimes();
             }).catch((error) => {
                 if (token !== forecastToken) return;
                 console.error('Failed to load point forecast:', error);
@@ -1645,6 +1656,62 @@
             if (left < container.scrollLeft || right > container.scrollLeft + visibleWidth) {
                 container.scrollLeft = Math.max(0, cell.offsetLeft - labelWidth - 40);
             }
+        }
+        
+        // 1時間予測の「時刻」を押したら、その時刻の雲量地図に切り替える。
+        // 地図のコマは表より短いことがある（MSMの計算が39時間先までか78時間先までかで変わる）ので、
+        // 対応するコマがある列にだけ下線とクリックを付ける
+        function markSelectableTimes() {
+            const row = document.querySelector('#forecast-msm tr[data-key="時刻"]');
+            if (!row) return;
+            
+            const keys = new Set();
+            for (const option of document.getElementById('time-select').options) {
+                const date = new Date(option.value);
+                if (!Number.isNaN(date.getTime())) keys.add(jstKey(date));
+            }
+            
+            for (const td of row.querySelectorAll('td')) {
+                const selectable = keys.has(td.dataset.time);
+                td.classList.toggle('time-link', selectable);
+                if (selectable) {
+                    td.tabIndex = 0;
+                } else {
+                    td.removeAttribute('tabindex');
+                }
+            }
+        }
+        
+        function showTimeOfCell(td) {
+            if (!td.classList.contains('time-link')) return;
+            const select = document.getElementById('time-select');
+            const index = [...select.options].findIndex((option) => {
+                const date = new Date(option.value);
+                return !Number.isNaN(date.getTime()) && jstKey(date) === td.dataset.time;
+            });
+            if (index < 0) return;
+            select.selectedIndex = index;
+            // プルダウンを操作したときと同じ経路を通す（地図の切り替えと赤枠の移動はそちらが行う）
+            select.dispatchEvent(new Event('change'));
+        }
+        
+        // 表は作り直されるので、節に委譲して一度だけ登録する
+        function initTimeCellLinks() {
+            const section = document.getElementById('forecast-msm');
+            const cellOf = (target) => target.closest && target.closest('tr[data-key="時刻"] td');
+            
+            section.addEventListener('click', (event) => {
+                const td = cellOf(event.target);
+                if (td) showTimeOfCell(td);
+            });
+            
+            section.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                const td = cellOf(event.target);
+                if (!td || !td.classList.contains('time-link')) return;
+                event.preventDefault();
+                showTimeOfCell(td);
+            });
         }
         
         // 現在の列の1つ前が左端に来るところまで横スクロールする（表を作り直したときだけ）
@@ -1910,6 +1977,7 @@
             }
             
             initInfoPopovers();
+            initTimeCellLinks();
             
             window.addEventListener('online', updateOfflineBanner);
             window.addEventListener('offline', updateOfflineBanner);
