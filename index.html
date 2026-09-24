@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>雲量予測 - Cloud Cover Forecast</title>
     
+    <!-- アクセス解析（GA4）。
+         このサイトはURLに地点の座標を書き戻すので、既定のまま入れると
+         page_location として利用者の現在地が1m精度で送られてしまう。
+         クエリ文字列を落としたURLを送るように上書きしている。
+         Cookieは既定どおり使う（同一ブラウザの再訪を数えるため） -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KBDGJJKXYZ"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-KBDGJJKXYZ', {
+            page_location: location.origin + location.pathname
+        });
+    </script>
+    
     <!-- 検索結果・SNSでの見え方。og:image は絶対URLでないと読まないクローラーがある -->
     <meta name="description" content="気象庁MSMの雲量を地図に描き、地点ごとの気温・雨・風の見通しをまとめて確認できます。">
     <link rel="canonical" href="https://yager.github.io/cloud-cover-forecast/">
@@ -995,6 +1010,7 @@
         <div class="credit">雲量・1時間予測・2週間予測: 気象庁MSM / ECMWF AIFS / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
         <div class="credit">週間予報: <a href="https://www.jma.go.jp/bosai/forecast/">気象庁</a></div>
         <div class="notice">雲量の地図・1時間予測・2週間予測は、数値予報モデルが計算した予測値をそのまま表示したものです。気象庁が発表する天気予報とは別のもので、誤差を含みます。週間予報は気象庁が発表した予報です。</div>
+        <div class="notice">アクセス解析に Google Analytics を使っています（Cookieを利用します）。地点の座標や地名は送信していません。詳しくは<a href="https://policies.google.com/technologies/partner-sites">Googleのポリシー</a>をご覧ください。</div>
         <div class="site-credit">
             &copy; 2026 yager
             <a href="https://github.com/yager/cloud-cover-forecast/blob/main/LICENSE">MIT License</a>
@@ -1082,6 +1098,11 @@
             
             const newUrl = window.location.pathname + '?' + params.toString();
             history.replaceState(null, '', newUrl);
+            
+            // 解析側が履歴の変更を拾った場合でも座標が乗らないようにしておく
+            if (window.gtag) {
+                gtag('set', { page_location: location.origin + location.pathname });
+            }
         }
         
         // マップを初期化する関数
