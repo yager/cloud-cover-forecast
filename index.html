@@ -2035,14 +2035,13 @@
                 viewport.setAttribute('aria-valuetext', `${hhmm(d)} ${frame.isForecast ? '予測' : '実況'}`);
             }
 
-            // コマを中央へ持ってくる
+            // コマを中央へ持ってくる。共有DOM（見出し・地図）は常にこのタブのコマで描き直す。
+            // index が変わらないときも render する（タブ切替で戻ってきたときに、
+            // もう片方のタブが書き換えた #nowcast-head をこのタブの内容に戻すため）
             function show(i, smooth) {
                 if (!frames.length) return;
-                const next = Math.max(0, Math.min(frames.length - 1, i));
-                if (next !== index) {
-                    index = next;
-                    render();
-                }
+                index = Math.max(0, Math.min(frames.length - 1, i));
+                render();
                 scrolling = true;
                 viewport.scrollTo({ left: index * STEP_PX, behavior: smooth ? 'smooth' : 'auto' });
                 setTimeout(() => { scrolling = false; }, smooth ? 400 : 80);
@@ -2168,7 +2167,12 @@
                     window.addEventListener('resize', onResize);
                     playButton.addEventListener('click', play);
                     resetButton.addEventListener('click', onReset);
-                    if (frames.length) layout();
+                    // 目盛り・見出し・スクロール位置は降水と雷で別物。共有DOMに
+                    // 前回タブの内容が残っているので、このタブのコマ列で描き直す
+                    if (frames.length) {
+                        buildStrip();
+                        layout();
+                    }
                 },
                 // タブを離れるときに呼ぶ。再生中なら止め、リスナーも外す
                 deactivate() {
@@ -2249,6 +2253,34 @@
             };
         }
 
+        // 降水・雷のタブ切替口。タイムラインとピン帯はタブごとに別だが、
+        // 共有DOMへの接続の仕方は同じなのでここにまとめてある。
+        //
+        // load() の途中（フレーム取得中）にタブを離れることがある。その場合、
+        // 取得が終わった時点でもう自分は表示されていないので activate() してはいけない
+        // （片方のタブのリスナーがもう片方に残る、という同種の不具合の再発になる）。
+        // stop() は再生停止に加え、共有DOMのイベントリスナーも外す
+        // （外さないと非表示のタブ側の再生ボタンなどが一緒に反応してしまう）。
+        // load() はタブに切り替わるたびに呼ばれる。#nowcast-pinbar は降水・雷で共有しているので、
+        // フレーム取得が済んでいても帯は毎回描き直す
+        function bindNowcastControls(timeline, pinBar) {
+            let loadToken = 0;
+            return {
+                stop() {
+                    loadToken++;
+                    timeline.deactivate();
+                },
+                async load() {
+                    const my = ++loadToken;
+                    await timeline.load();
+                    if (my !== loadToken) return; // 待っている間にタブが変わった
+                    timeline.activate();
+                    pinBar.setFrames(timeline.frames);
+                },
+                setPin: pinBar.setPin
+            };
+        }
+
         // 降水ナウキャスト
         async function createNowcastRain() {
             const nc = await import('./nowcast.js');
@@ -2260,29 +2292,7 @@
                 renderFrame: (frame) => layer.setUrl(nc.tileUrl(frame))
             });
 
-            // load() の途中（フレーム取得中）にタブを離れることがある。その場合、
-            // 取得が終わった時点でもう自分は表示されていないので activate() してはいけない
-            // （雷タブでも降水のリスナーが残る、という同種の不具合の再発になる）
-            let loadToken = 0;
-
-            return {
-                // タブを離れるときに呼ばれる。再生停止に加え、共有DOMのイベントリスナーも外す
-                // （外さないと雷タブでも降水の再生ボタンなどが一緒に反応してしまう）
-                stop() {
-                    loadToken++;
-                    timeline.deactivate();
-                },
-                // タブに切り替わるたびに呼ばれる。#nowcast-pinbar は雷タブと共有しているので、
-                // フレーム取得が済んでいても帯は毎回描き直す
-                async load() {
-                    const my = ++loadToken;
-                    await timeline.load();
-                    if (my !== loadToken) return; // 待っている間にタブが変わった
-                    timeline.activate();
-                    pinBar.setFrames(timeline.frames);
-                },
-                setPin: pinBar.setPin
-            };
+            return bindNowcastControls(timeline, pinBar);
         }
 
         // 雷ナウキャスト。面（thns）と落雷地点（liden）を重ねる。
@@ -2329,27 +2339,7 @@
 
             const timeline = await createTimeline({ loadFrames: () => nc.loadThunderFrames(), renderFrame });
 
-            // load() の途中（フレーム取得中）にタブを離れることがある。その場合、
-            // 取得が終わった時点でもう自分は表示されていないので activate() してはいけない
-            let loadToken = 0;
-
-            return {
-                // タブを離れるときに呼ばれる。再生停止に加え、共有DOMのイベントリスナーも外す
-                stop() {
-                    loadToken++;
-                    timeline.deactivate();
-                },
-                // タブに切り替わるたびに呼ばれる。#nowcast-pinbar は降水タブと共有しているので、
-                // フレーム取得が済んでいても帯は毎回描き直す
-                async load() {
-                    const my = ++loadToken;
-                    await timeline.load();
-                    if (my !== loadToken) return; // 待っている間にタブが変わった
-                    timeline.activate();
-                    pinBar.setFrames(timeline.frames);
-                },
-                setPin: pinBar.setPin
-            };
+            return bindNowcastControls(timeline, pinBar);
         }
 
         // 雲量地図で選んでいる時刻の列を赤線で囲み、その列まで横スクロールする。
@@ -2545,13 +2535,17 @@
             const isNowcast = view === 'rain' || view === 'thunder';
             document.querySelector('.time-select-container').hidden = isNowcast;
             document.getElementById('nowcast-timeline').hidden = !isNowcast;
-            if (nowcastRain) {
-                if (view === 'rain') nowcastRain.load().catch((e) => console.error('降水ナウキャストを取得できませんでした', e));
-                else nowcastRain.stop();
-            }
-            if (nowcastThunder) {
-                if (view === 'thunder') nowcastThunder.load().catch((e) => console.error('雷ナウキャストを取得できませんでした', e));
-                else nowcastThunder.stop();
+            // 降水・雷は同時に1つだけ動かす（共有DOMを奪い合わないように）
+            const nowcasts = { rain: nowcastRain, thunder: nowcastThunder };
+            const nowcastLabels = { rain: '降水', thunder: '雷' };
+            for (const key of Object.keys(nowcasts)) {
+                const ctrl = nowcasts[key];
+                if (!ctrl) continue;
+                if (view === key) {
+                    ctrl.load().catch((e) => console.error(`${nowcastLabels[key]}ナウキャストを取得できませんでした`, e));
+                } else {
+                    ctrl.stop();
+                }
             }
             // 隠れていた地図は大きさを持っていないので測り直す
             Object.values(maps).forEach((map) => map.invalidateSize());
@@ -2743,14 +2737,15 @@
             // 時間の経過で「過ぎた時刻」が増えるので、定期的に付け直す
             setInterval(markPastCells, 60 * 1000);
             
-            nowcastRain = await createNowcastRain();
             // URL で指定されたピンは、ここに来る前に置かれていることがある
-            nowcastRain.setPin(pinController && pinController.pin);
-            if (mapView === 'rain') nowcastRain.load().catch(() => {});
-
-            nowcastThunder = await createNowcastThunder();
-            nowcastThunder.setPin(pinController && pinController.pin);
-            if (mapView === 'thunder') nowcastThunder.load().catch(() => {});
+            const pin = pinController && pinController.pin;
+            for (const [key, factory] of [['rain', createNowcastRain], ['thunder', createNowcastThunder]]) {
+                const ctrl = await factory();
+                if (key === 'rain') nowcastRain = ctrl;
+                else nowcastThunder = ctrl;
+                ctrl.setPin(pin);
+                if (mapView === key) ctrl.load().catch(() => {});
+            }
             
             cloudSource = await createMsmSource(updatePinInfo);
             
