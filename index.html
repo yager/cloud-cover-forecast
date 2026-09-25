@@ -1721,7 +1721,7 @@
             let currentFrame = null;
             
             Object.keys(maps).forEach((type) => {
-                if (type === 'rain') return; // 降水は別の時間軸なので別管理
+                if (type === 'rain' || type === 'thunder') return; // 降水・雷は別の時間軸なので別管理
                 layers[type] = type === 'wind'
                     ? new msm.WindGridLayer().addTo(maps[type])
                     : new msm.CloudGridLayer().addTo(maps[type]);
