@@ -244,6 +244,9 @@
             scrollbar-width: none;
             cursor: grab;
             touch-action: pan-x;
+            /* 表示用の目盛り・ラベルなので、ドラッグ中に文字選択状態になるのを防ぐ */
+            -webkit-user-select: none;
+            user-select: none;
         }
         .nowcast-viewport::-webkit-scrollbar {
             display: none;
@@ -2047,10 +2050,18 @@
             // 中央に来ているコマを読み取る。
             // メモリの間隔はデータの間隔（5分）そのものなので、途中で止まると
             // どの時刻を指しているのか分からなくなる。スクロールが止まったら
-            // 最寄りのコマへ smooth スナップする（フリースクロール自体は妨げない）
+            // 最寄りのコマへ smooth スナップする（フリースクロール自体は妨げない）。
+            //
+            // 再生中（timer が動いている間）はここで何もしない。play() 自身が
+            // index とスクロール位置を完全に管理しているので、ここで反応する理由が無い。
+            // 本来は scrolling フラグ（80ms）で自分のスクロールを無視しているが、
+            // ピンのサンプリングなどでメインスレッドが混むとこのタイマーが間に合わず、
+            // 自分自身のスクロールをユーザー操作と誤認識してスナップと再生が競合し、
+            // タイムラインが行ったり来たりする不具合があった。timer 中は完全に無視することで、
+            // タイミングに依存せず解消する
             let snapTimer = null;
             function onScroll() {
-                if (scrolling || !frames.length) return;
+                if (timer || scrolling || !frames.length) return;
                 const i = Math.max(0, Math.min(frames.length - 1, Math.round(viewport.scrollLeft / STEP_PX)));
                 if (i !== index) {
                     index = i;
@@ -2075,10 +2086,11 @@
 
             function play() {
                 if (timer) return stop();
+                clearTimeout(snapTimer); // 保留中のスナップがあれば、再生開始と競合する前に捨てる
                 if (index >= frames.length - 1) show(0);
                 playButton.textContent = '■';
                 playButton.setAttribute('aria-label', '停止');
-                timer = setInterval(() => show(index >= frames.length - 1 ? 0 : index + 1), 350);
+                timer = setInterval(() => show(index >= frames.length - 1 ? 0 : index + 1), 1000);
             }
 
             // カーソルは viewport の中央に固定してあるので、
@@ -2110,38 +2122,68 @@
                 axis.innerHTML = html;
             }
 
-            viewport.addEventListener('scroll', onScroll, { passive: true });
-
             // PCはホイールでもドラッグでも動かせるように
             let dragFrom = null;
-            viewport.addEventListener('pointerdown', (e) => {
+            function onPointerDown(e) {
                 if (e.pointerType === 'touch') return; // タッチは既定のスクロールに任せる
                 dragFrom = { x: e.clientX, left: viewport.scrollLeft };
                 viewport.setPointerCapture(e.pointerId);
                 stop();
-            });
-            viewport.addEventListener('pointermove', (e) => {
+            }
+            function onPointerMove(e) {
                 if (!dragFrom) return;
                 viewport.scrollLeft = dragFrom.left - (e.clientX - dragFrom.x);
-            });
-            const endDrag = () => { if (dragFrom) { dragFrom = null; show(index, true); } };
-            viewport.addEventListener('pointerup', endDrag);
-            viewport.addEventListener('pointercancel', endDrag);
-
-            viewport.addEventListener('keydown', (e) => {
+            }
+            function endDrag() { if (dragFrom) { dragFrom = null; show(index, true); } }
+            function onKeyDown(e) {
                 if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
                 e.preventDefault();
                 stop();
                 show(index + (e.key === 'ArrowRight' ? 1 : -1), true);
-            });
+            }
+            function onResize() { if (frames.length) layout(); }
+            function onReset() { stop(); show(nowIndex(), true); }
 
-            window.addEventListener('resize', () => { if (frames.length) layout(); });
-            playButton.addEventListener('click', play);
-            resetButton.addEventListener('click', () => { stop(); show(nowIndex(), true); });
+            // 降水・雷はこのDOM（タイムラインの操作UI）を共有している。両方が createTimeline を
+            // 呼ぶので、リスナーを付けっぱなしにすると片方の再生ボタンでもう片方まで一緒に
+            // 動いてしまう（実機で発覚：雷タブで再生→降水タブに切り替えても裏で雷の再生が
+            // 残っていて、共有DOM（#nowcast-head 等）を奪い合っていた）。
+            // アクティブなタブの間だけリスナーを付ける
+            let active = false;
 
             return {
                 stop,
                 get frames() { return frames; },
+                // このタブが表示されている間だけ呼ぶ
+                activate() {
+                    if (active) return;
+                    active = true;
+                    viewport.addEventListener('scroll', onScroll, { passive: true });
+                    viewport.addEventListener('pointerdown', onPointerDown);
+                    viewport.addEventListener('pointermove', onPointerMove);
+                    viewport.addEventListener('pointerup', endDrag);
+                    viewport.addEventListener('pointercancel', endDrag);
+                    viewport.addEventListener('keydown', onKeyDown);
+                    window.addEventListener('resize', onResize);
+                    playButton.addEventListener('click', play);
+                    resetButton.addEventListener('click', onReset);
+                    if (frames.length) layout();
+                },
+                // タブを離れるときに呼ぶ。再生中なら止め、リスナーも外す
+                deactivate() {
+                    if (!active) return;
+                    active = false;
+                    stop();
+                    viewport.removeEventListener('scroll', onScroll);
+                    viewport.removeEventListener('pointerdown', onPointerDown);
+                    viewport.removeEventListener('pointermove', onPointerMove);
+                    viewport.removeEventListener('pointerup', endDrag);
+                    viewport.removeEventListener('pointercancel', endDrag);
+                    viewport.removeEventListener('keydown', onKeyDown);
+                    window.removeEventListener('resize', onResize);
+                    playButton.removeEventListener('click', play);
+                    resetButton.removeEventListener('click', onReset);
+                },
                 // タブに切り替わるたびに呼ばれる。取得は最初の1回だけだが、
                 // 隠れている間のリサイズでは幅を測れないので、配置は毎回やり直す
                 async load() {
@@ -2218,12 +2260,25 @@
                 renderFrame: (frame) => layer.setUrl(nc.tileUrl(frame))
             });
 
+            // load() の途中（フレーム取得中）にタブを離れることがある。その場合、
+            // 取得が終わった時点でもう自分は表示されていないので activate() してはいけない
+            // （雷タブでも降水のリスナーが残る、という同種の不具合の再発になる）
+            let loadToken = 0;
+
             return {
-                stop: timeline.stop,
+                // タブを離れるときに呼ばれる。再生停止に加え、共有DOMのイベントリスナーも外す
+                // （外さないと雷タブでも降水の再生ボタンなどが一緒に反応してしまう）
+                stop() {
+                    loadToken++;
+                    timeline.deactivate();
+                },
                 // タブに切り替わるたびに呼ばれる。#nowcast-rain は雷タブと共有しているので、
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
+                    const my = ++loadToken;
                     await timeline.load();
+                    if (my !== loadToken) return; // 待っている間にタブが変わった
+                    timeline.activate();
                     pinBar.setFrames(timeline.frames);
                 },
                 setPin: pinBar.setPin
@@ -2231,10 +2286,10 @@
         }
 
         // 雷ナウキャスト。面（thns）と落雷地点（liden）を重ねる。
-        // _clampZoom の偶数ズーム対策は nc.createLayer() 経由で降水と共有している
+        // 偶数ズームへの丸めは降水と共通だが、上限ズームは違う（nowcast.js 参照）
         async function createNowcastThunder() {
             const nc = await import('./nowcast.js');
-            const areaLayer = nc.createLayer().addTo(maps.thunder);
+            const areaLayer = nc.createThunderAreaLayer().addTo(maps.thunder);
             const markers = L.layerGroup().addTo(maps.thunder);
             // #nowcast-rain は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
             // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）。
@@ -2245,10 +2300,21 @@
             );
             let strikeToken = 0;
 
+            // 落雷地点のマーカー。ピン（pin.js の PIN_ICON）と同じ作法で、白フチ付きの自前SVGにする。
+            // 円だと目立たなかったので、意味も伝わる稲妻の形にした
+            const STRIKE_ICON = L.divIcon({
+                className: 'strike-marker',
+                html: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="22" viewBox="0 0 24 24">'
+                    + '<path d="M7 2v11h3v9l7-12h-4l4-8z" fill="#ffe066" stroke="#241b00" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+                iconSize: [16, 22],
+                iconAnchor: [8, 11]
+            });
+
             async function renderFrame(frame) {
-                // thns が無いコマでは面を更新しない。直前のコマの面がそのまま残るだけで、
-                // データを捏造することにはならない（ピン帯も同じ考え方で揃えてある）
-                if (frame.hasArea) areaLayer.setUrl(nc.thunderTileUrl(frame));
+                // frame.areaFrame は「このコマの時点で分かる一番新しい面」を指す
+                // （nowcast.js の loadThunderFrames で事前に解決済み）。逐次再生だけでなく、
+                // リセットやドラッグでいきなり位置が飛んでも正しい面にたどり着ける
+                if (frame.areaFrame) areaLayer.setUrl(nc.thunderTileUrl(frame.areaFrame));
 
                 const token = ++strikeToken;
                 const features = await nc.loadStrikes(frame);
@@ -2256,24 +2322,30 @@
                 markers.clearLayers();
                 for (const feature of features) {
                     const [lng, lat] = feature.geometry.coordinates;
-                    L.circleMarker([lat, lng], {
-                        radius: 4,
-                        weight: 1,
-                        color: '#3a2f00',
-                        fillColor: '#ffe066',
-                        fillOpacity: 0.9
-                    }).bindTooltip(feature.properties.obstimeJST || '').addTo(markers);
+                    L.marker([lat, lng], { icon: STRIKE_ICON })
+                        .bindTooltip(feature.properties.obstimeJST || '').addTo(markers);
                 }
             }
 
             const timeline = await createTimeline({ loadFrames: () => nc.loadThunderFrames(), renderFrame });
 
+            // load() の途中（フレーム取得中）にタブを離れることがある。その場合、
+            // 取得が終わった時点でもう自分は表示されていないので activate() してはいけない
+            let loadToken = 0;
+
             return {
-                stop: timeline.stop,
+                // タブを離れるときに呼ばれる。再生停止に加え、共有DOMのイベントリスナーも外す
+                stop() {
+                    loadToken++;
+                    timeline.deactivate();
+                },
                 // タブに切り替わるたびに呼ばれる。#nowcast-rain は降水タブと共有しているので、
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
+                    const my = ++loadToken;
                     await timeline.load();
+                    if (my !== loadToken) return; // 待っている間にタブが変わった
+                    timeline.activate();
                     pinBar.setFrames(timeline.frames);
                 },
                 setPin: pinBar.setPin

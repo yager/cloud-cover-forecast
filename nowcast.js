@@ -74,25 +74,43 @@ export async function loadFrames() {
 // 気象庁が中身を用意しているズーム。ここ以外は 404 ではなく
 // **HTTP 200 で完全に透明な 334 バイトの PNG** が返るので、応答コードでは気付けない。
 // 雨のある領域で実測したところ、奇数ズームは実況・予測のどのコマでも中身が空だった。
-const NATIVE_ZOOMS = [4, 6, 8, 10];
+const MIN_NATIVE_ZOOM = 4;
 
 // Leaflet が取りに行くタイルのズームは Math.round(地図のズーム) なので、
 // 素のままだと地図が z7.25 になった瞬間に z7（空）を取りに行き、レイヤーが消える。
 // ここで偶数に丸めておけば、Leaflet が取得したタイルを拡大・縮小して表示してくれる。
 // 切り上げると取得枚数が4倍になり再生が重くなるので、切り下げ側に寄せる。
-const NowcastLayer = L.TileLayer.extend({
-    _clampZoom(zoom) {
-        const even = Math.floor(zoom / 2) * 2;
-        return Math.min(NATIVE_ZOOMS[NATIVE_ZOOMS.length - 1], Math.max(NATIVE_ZOOMS[0], even));
-    }
-});
+//
+// 上限のズーム（maxNativeZoom）は降水と雷の面で別にしてある。降水（hrpns）はズーム10まで
+// 中身があるが、雷の面（thns）は実測でズーム10のタイルが常に空だった（同じ地点・同じコマで
+// ズーム8にだけ着色）。1kmメッシュはそこまで細かい解像度を持たないためとみられる
+function makeNowcastLayerClass(maxNativeZoom) {
+    return L.TileLayer.extend({
+        _clampZoom(zoom) {
+            const even = Math.floor(zoom / 2) * 2;
+            return Math.min(maxNativeZoom, Math.max(MIN_NATIVE_ZOOM, even));
+        }
+    });
+}
+
+const RainLayer = makeNowcastLayerClass(10);
+const ThunderAreaLayer = makeNowcastLayerClass(8);
 
 // 降水のタイル。コマを差し替えて動かすので、URL を張り替えられるようにしてある。
 // Leaflet は表示中のタイルしか取りに行かないので、先読みは画面内だけで済む
 export function createLayer() {
-    return new NowcastLayer('', {
+    return new RainLayer('', {
         opacity: 0.8,
         // 差し替え中に前のコマを消さない。ちらつきを抑える
+        keepBuffer: 4,
+        className: 'nowcast-tile'
+    });
+}
+
+// 雷の面（thns）のタイル。ズームの上限だけ createLayer と違う
+export function createThunderAreaLayer() {
+    return new ThunderAreaLayer('', {
+        opacity: 0.8,
         keepBuffer: 4,
         className: 'nowcast-tile'
     });
@@ -128,7 +146,19 @@ export async function loadThunderFrames() {
     const from = newestObserved
         ? newestObserved.time.getTime() - THUNDER_OBSERVED_MINUTES * 60 * 1000
         : -Infinity;
-    return all.filter((f) => f.time.getTime() >= from);
+    const frames = all.filter((f) => f.time.getTime() >= from);
+
+    // 面（thns）を持たないコマ（liden だけの5分刻み）のために、直近で面を持っていたコマへの
+    // 参照をあらかじめ持たせておく。逐次再生なら「1つ前のコマ」で足りるが、リセットやドラッグで
+    // 位置がいきなり飛ぶこともあるので、どのコマから見ても「その時点で分かる一番新しい面」に
+    // 一貫してたどり着けるようにしておく
+    let carry = null;
+    for (const frame of frames) {
+        if (frame.hasArea) carry = frame;
+        frame.areaFrame = carry;
+    }
+
+    return frames;
 }
 
 export function thunderTileUrl(frame) {
@@ -218,11 +248,11 @@ export function thunderActivityLabel(level) {
 
 const THUNDER_RANK_BY_RGB = new Map(THUNDER_COLORS.map((hex, i) => [parseInt(hex, 16), i + 1]));
 
-// 同じ現象でも生成されるズームによって描画の有無が入れ替わることを実測で確認した
-// （同一地点・同一コマで z10 は空、z8 は着色、ということがあった）。1kmメッシュを
-// 各ズームで別々に描き直しているためと見られる。細かい方から順に試し、
-// 最初に何か見つかったズームを採用する
-const THUNDER_SAMPLE_ZOOMS = [10, 8, 6, 4];
+// z10 は実測で常に空だった（同一地点・同一コマの3x3タイルを確認しても全部空、
+// z8は着色）ので候補に含めない。1kmメッシュが z10 の解像度を持たないためとみられる。
+// z8/z6/z4 の間でも生成ズームによって描画の有無が入れ替わることがあるため、
+// 細かい方から順に試し、最初に何か見つかったズームを採用する
+const THUNDER_SAMPLE_ZOOMS = [8, 6, 4];
 
 // 地点の雷活動度を階級（0〜4、0は活動度なし）で返す
 export async function sampleThunderAt(frame, lat, lng) {
