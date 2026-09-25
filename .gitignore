@@ -3,3 +3,6 @@
 fonts/
 output/
 get_cloud_cover_forecast.php
+
+# 公開しない作業用。調査メモや検討中の設計を置く（消すと戻せないので掃除対象にしない）
+scratch/

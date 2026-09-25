@@ -175,12 +175,243 @@
             color: #333;
         }
         
+        /* 地図の下の操作帯。地図の枠と地続きにする（角丸なし・枠の続き） */
+        .time-panel {
+            padding: 8px 10px;
+            background: var(--content-bg);
+            border: 1px solid #999;
+            border-top: 1px solid #d5dbdf;
+        }
+        
         .time-select-container {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 5px;
         }
         
+        .time-select-container[hidden],
+        .nowcast-timeline[hidden] {
+            display: none;
+        }
+        
+        /* 気象庁の降水の配色は黒い地図の上に置く前提で作られていて、
+           白い背景だと一番よくある弱い雨（#f2f2ff）がコントラスト比1.11で消える。
+           棒の色は気象庁が塗ったものをそのまま使うので、こちらの地を黒に合わせる */
+        .nowcast-timeline {
+            display: block;
+            margin: -8px -10px;
+            padding: 5px 10px 8px;
+            background: #1c1f21;
+        }
+        
+        /* 上段: 選択中の日時と、実況か予測か */
+        .nowcast-head {
+            margin-bottom: 3px;
+            font-size: 13px;
+            color: #e8eaec;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+        .nowcast-head b {
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .nowcast-head .kind {
+            margin-left: 5px;
+            font-size: 11px;
+            color: #7fc08a;
+        }
+        .nowcast-head .kind[data-forecast="true"] {
+            color: #d8a75a;
+        }
+        
+        .nowcast-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* カーソルは中央に固定し、軸のほうを動かす。全期間は一度に見せない */
+        .nowcast-track {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .nowcast-viewport {
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            cursor: grab;
+            touch-action: pan-x;
+        }
+        .nowcast-viewport::-webkit-scrollbar {
+            display: none;
+        }
+        .nowcast-viewport:active {
+            cursor: grabbing;
+        }
+        
+        .nowcast-strip {
+            position: relative;
+            height: 30px;
+        }
+        
+        /* 目盛りをまとめて左右にずらすための層。
+           絶対配置の子は親の padding box を基準にするので、
+           .nowcast-strip に padding を入れても目盛りは動かない。この層の left で動かす */
+        .nowcast-ticks {
+            position: absolute;
+            top: 0;
+            height: 100%;
+        }
+        /* 雨の棒グラフと時間軸。同じ基準で重ねるので位置は揃う */
+        .nowcast-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+        }
+        
+        /* その地点の降水。強さは気象庁が塗った色だけで表し、太さや長さは変えない。
+           目盛りの手前に重ねるので、目盛りは帯の上下に突き抜けて見える */
+        .nowcast-rain {
+            position: absolute;
+            top: 4px;
+            height: 8px;
+        }
+        
+        /* 目盛りをつなぐ横線。実況と予測の区別は上の文字でしているので、線では区別しない */
+        .nowcast-rail {
+            position: absolute;
+            left: 0;
+            top: 7px;
+            height: 1px;
+            background: #454c50;
+        }
+        
+        /* 目盛り。雨の帯（4〜12px）の上下に突き抜ける長さにして、帯に隠れないようにする */
+        .nowcast-tick {
+            position: absolute;
+            top: 2px;
+            width: 1px;
+            height: 12px;
+            background: #4d555a;
+        }
+        .nowcast-tick.major {
+            top: 0;
+            height: 16px;
+            background: #7b868c;
+        }
+        .nowcast-tick.now {
+            top: 0;
+            height: 16px;
+            background: #7fc08a;
+        }
+        
+        .nowcast-label {
+            position: absolute;
+            top: 17px;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #949da2;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+        .nowcast-label.now {
+            color: #7fc08a;
+            font-weight: 700;
+        }
+        
+        /* 中央の固定カーソル */
+        /* 基準線。位置が固定されているので、太ければ長さは要らない。
+           一番弱い雨の色（#f2f2ff）に重なっても消えないよう、縁を暗く落とす */
+        .nowcast-cursor {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 3px;
+            height: 16px;
+            margin-left: -1.5px;
+            background: #fff;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+        }
+        
+        .nowcast-play {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            font-size: 13px;
+            color: #e8eaec;
+            border: 1px solid #4d555a;
+            border-radius: 4px;
+            background: #2b3134;
+            cursor: pointer;
+        }
+        .nowcast-play:hover {
+            background: #3a4145;
+        }
+
+        /* 地図の左下に出す配色の凡例（風・降水・雷）。スマホでも邪魔にならないよう極小にしてある */
+        .map-legend {
+            background: rgba(20, 22, 24, 0.82);
+            color: #e8eaec;
+            border-radius: 4px;
+            padding: 3px 5px;
+            font-size: 9px;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            pointer-events: none;
+        }
+        .map-legend .legend-bar {
+            display: flex;
+            width: 88px;
+            height: 8px;
+        }
+        .map-legend .legend-bar i {
+            flex: 1;
+            display: block;
+        }
+        /* 目盛りは帯の境目（隣り合う色の間）に置く。気象庁の凡例と同じ考え方 */
+        .map-legend .legend-ticks {
+            position: relative;
+            width: 88px;
+            height: 9px;
+            margin-top: 1px;
+        }
+        .map-legend .legend-ticks span {
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+        }
+        .map-legend .legend-caption {
+            text-align: left;
+            opacity: 0.75;
+            margin-top: 1px;
+        }
+        /* 雷は連続量ではなく活動度1〜4の区分なので、帯ではなく個別のマスで表す */
+        .map-legend .legend-levels {
+            display: flex;
+            gap: 2px;
+        }
+        .map-legend .legend-levels i {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 14px;
+            color: #000;
+            font-style: normal;
+            font-weight: 700;
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.6);
+        }
+
         .time-select-btn {
             width: 30px;
             height: 30px;
@@ -231,7 +462,7 @@
             padding: 10px;
             border: 1px solid #999;
             border-top: none;
-            border-radius: 0 0 10px 10px;
+            border-bottom: none;
         }
         
         .map-wrapper {
@@ -254,7 +485,9 @@
             border-bottom: 1px solid #999;
         }
         .layer-tab {
-            min-width: 100px;
+            /* ジャンル色の線。選択中かどうかに関わらず同じ濃さにする。
+               非選択のタブこそ「これは何系か」を知りたいため */
+            box-shadow: inset 0 3px 0 var(--genre);
             margin-bottom: -1px;
             padding: 0 14px;
             height: 28px;
@@ -269,6 +502,14 @@
         .layer-tab + .layer-tab {
             margin-left: 4px;
         }
+        /* 青灰＝数値予報モデルの計算値、緑灰＝気象庁の発表・観測。
+           表の見出しの「予測／予報」と同じ色を使い、語彙を増やさない */
+        .layer-tab[data-genre="model"] {
+            --genre: #6a7e9b;
+        }
+        .layer-tab[data-genre="nowcast"] {
+            --genre: #5c8a64;
+        }
         .layer-tab:hover {
             background: #f8f8f8;
         }
@@ -278,8 +519,30 @@
             background: white;
             border-bottom-color: white;
         }
+        .wind-grid-tile {
+            image-rendering: pixelated;
+        }
+        
         .maps-container[data-view="total"] .layers-only,
-        .maps-container[data-view="layers"] .total-only {
+        .maps-container[data-view="total"] .wind-only,
+        .maps-container[data-view="total"] .rain-only,
+        .maps-container[data-view="total"] .thunder-only,
+        .maps-container[data-view="layers"] .total-only,
+        .maps-container[data-view="layers"] .wind-only,
+        .maps-container[data-view="layers"] .rain-only,
+        .maps-container[data-view="layers"] .thunder-only,
+        .maps-container[data-view="wind"] .total-only,
+        .maps-container[data-view="wind"] .layers-only,
+        .maps-container[data-view="wind"] .rain-only,
+        .maps-container[data-view="wind"] .thunder-only,
+        .maps-container[data-view="rain"] .total-only,
+        .maps-container[data-view="rain"] .layers-only,
+        .maps-container[data-view="rain"] .wind-only,
+        .maps-container[data-view="rain"] .thunder-only,
+        .maps-container[data-view="thunder"] .total-only,
+        .maps-container[data-view="thunder"] .layers-only,
+        .maps-container[data-view="thunder"] .wind-only,
+        .maps-container[data-view="thunder"] .rain-only {
             display: none;
         }
         
@@ -844,6 +1107,13 @@
                 width: 220px;
                 flex: none;
             }
+
+            /* PCは横に余裕があるぶん、トラックが伸びきってリセット/再生ボタンが
+               画面の両端に離れて見える。ひとまとまりとして中央に収める */
+            .nowcast-bar {
+                max-width: 480px;
+                margin: 0 auto;
+            }
             
             /* PCは横に余裕があるので、検索欄は常に出しておく */
             .point-panel.search-collapsed .search-form {
@@ -889,12 +1159,21 @@
                 height: calc(var(--map-width) * 2 / 3);
             }
             
-            /* 全雲量は1枚だけなので、パネルの横幅いっぱいに広げる */
+            /* 全雲量と風は1枚だけなので、パネルの横幅いっぱいに広げる */
             .maps-container[data-view="total"] .map-wrapper,
-            .maps-container[data-view="total"] .map {
+            .maps-container[data-view="total"] .map,
+            .maps-container[data-view="wind"] .map-wrapper,
+            .maps-container[data-view="wind"] .map,
+            .maps-container[data-view="rain"] .map-wrapper,
+            .maps-container[data-view="rain"] .map,
+            .maps-container[data-view="thunder"] .map-wrapper,
+            .maps-container[data-view="thunder"] .map {
                 width: 100%;
             }
-            .maps-container[data-view="total"] .map {
+            .maps-container[data-view="total"] .map,
+            .maps-container[data-view="wind"] .map,
+            .maps-container[data-view="rain"] .map,
+            .maps-container[data-view="thunder"] .map {
                 height: calc(var(--map-width) * 2 / 3);
             }
 
@@ -914,13 +1193,6 @@
             <h1><a id="title-link" href="https://yager.github.io/cloud-cover-forecast/"><img id="title-logo" src="icons/logo.svg" width="700" height="550" alt="">雲量予測</a></h1>
             <div id="update-time">データ取得中...</div>
         </div>
-        <div class="time-select-container">
-            <button id="time-prev-btn" class="time-select-btn" type="button">◀︎</button>
-            <select id="time-select" class="time-select">
-                <option>データ取得中...</option>
-            </select>
-            <button id="time-next-btn" class="time-select-btn" type="button">▶︎</button>
-        </div>
     </header>
     
     <p id="offline-banner" class="offline-banner" hidden></p>
@@ -928,8 +1200,11 @@
     <main id="content">
         <div class="maps-panel">
         <div class="layer-tabs" role="tablist">
-            <button type="button" class="layer-tab" data-view="total" role="tab">全雲量</button>
-            <button type="button" class="layer-tab" data-view="layers" role="tab">上・中・下層</button>
+            <button type="button" class="layer-tab" data-view="total" data-genre="model" role="tab">雲(全)</button>
+            <button type="button" class="layer-tab" data-view="layers" data-genre="model" role="tab">雲(上中下層)</button>
+            <button type="button" class="layer-tab" data-view="wind" data-genre="model" role="tab">風</button>
+            <button type="button" class="layer-tab" data-view="rain" data-genre="nowcast" role="tab">降水</button>
+            <button type="button" class="layer-tab" data-view="thunder" data-genre="nowcast" role="tab">雷</button>
         </div>
         
         <div class="maps-container" id="maps-container">
@@ -944,6 +1219,45 @@
             </div>
             <div class="map-wrapper layers-only">
                 <div id="map-lower" class="map"></div>
+            </div>
+            <div class="map-wrapper wind-only">
+                <div id="map-wind" class="map"></div>
+            </div>
+            <div class="map-wrapper rain-only">
+                <div id="map-rain" class="map"></div>
+            </div>
+            <div class="map-wrapper thunder-only">
+                <div id="map-thunder" class="map"></div>
+            </div>
+        </div>
+        
+        <!-- 時刻の操作。雲・風とナウキャストは時間軸が違うので、タブに応じて中身ごと入れ替える -->
+        <div class="time-panel">
+            <div class="time-select-container">
+                <button id="time-prev-btn" class="time-select-btn" type="button">◀︎</button>
+                <select id="time-select" class="time-select">
+                    <option>データ取得中...</option>
+                </select>
+                <button id="time-next-btn" class="time-select-btn" type="button">▶︎</button>
+            </div>
+            <div class="nowcast-timeline" id="nowcast-timeline" hidden>
+                <div class="nowcast-head" id="nowcast-head">読み込み中…</div>
+                <div class="nowcast-bar">
+                    <button id="nowcast-reset" class="nowcast-play" type="button" aria-label="現在時刻に戻る" title="現在時刻に戻る">
+                        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"></path>
+                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"></path>
+                        </svg>
+                    </button>
+                    <div class="nowcast-track">
+                        <div class="nowcast-viewport" id="nowcast-viewport" role="slider"
+                             aria-label="表示する時刻" tabindex="0">
+                            <div class="nowcast-strip" id="nowcast-strip"><div class="nowcast-ticks" id="nowcast-ticks"><div class="nowcast-layer" id="nowcast-axis"></div><div class="nowcast-layer" id="nowcast-rain"></div></div></div>
+                        </div>
+                        <div class="nowcast-cursor" aria-hidden="true"></div>
+                    </div>
+                    <button id="nowcast-play" class="nowcast-play" type="button" aria-label="再生">▶</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1014,9 +1328,10 @@
     <footer class="site-footer">
         <h2 class="footer-heading">情報ソース</h2>
         <div class="credit">地図・場所検索: <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a></div>
-        <div class="credit">雲量・1時間予測・2週間予測: 気象庁MSM / ECMWF AIFS / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
+        <div class="credit">雲量・風の地図・1時間予測・2週間予測: 気象庁MSM / ECMWF AIFS / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
         <div class="credit">週間予報: <a href="https://www.jma.go.jp/bosai/forecast/">気象庁</a></div>
-        <div class="notice">雲量の地図・1時間予測・2週間予測は、数値予報モデルが計算した予測値をそのまま表示したものです。気象庁が発表する天気予報とは別のもので、誤差を含みます。週間予報は気象庁が発表した予報です。</div>
+        <div class="credit">降水・雷の地図: <a href="https://www.jma.go.jp/bosai/nowc/">気象庁ナウキャスト</a></div>
+        <div class="notice">雲量・風の地図・1時間予測・2週間予測は、数値予報モデルが計算した予測値をそのまま表示したものです。気象庁が発表する天気予報とは別のもので、誤差を含みます。週間予報は気象庁が発表した予報、降水・雷の地図は気象庁の観測・解析です。</div>
         <div class="notice">アクセス解析に Google Analytics を使っています（Cookieを利用します）。地点の座標や地名は送信していません。詳しくは<a href="https://policies.google.com/technologies/partner-sites">Googleのポリシー</a>をご覧ください。</div>
         <div class="site-credit">
             &copy; 2026 yager
@@ -1043,8 +1358,15 @@
             total: null,
             lower: null,
             middle: null,
-            upper: null
+            upper: null,
+            wind: null,
+            rain: null,
+            thunder: null
         };
+
+        // 雲量の地図とは別の時間軸で動くナウキャスト（降水・雷）
+        let nowcastRain = null;
+        let nowcastThunder = null;
         
         // 地図の表示の切り替え（total: 総雲量1枚 / layers: 上中下層の3枚）
         const PC_MEDIA = '(min-width: 1000px)';
@@ -1124,6 +1446,9 @@
                 zoomSnap: 0.25
             };
             
+            maps.rain = L.map('map-rain', mapOptions);
+            maps.thunder = L.map('map-thunder', mapOptions);
+            maps.wind = L.map('map-wind', mapOptions);
             maps.total = L.map('map-total', mapOptions);
             maps.lower = L.map('map-lower', mapOptions);
             maps.middle = L.map('map-middle', mapOptions);
@@ -1167,6 +1492,9 @@
             
             // 各マップにラベルを追加（右上）
             const MAP_LABELS = {
+                rain: '雨雲<small>気象庁ナウキャスト</small>',
+                thunder: '雷<small>気象庁ナウキャスト</small>',
+                wind: '風<small>地上10m付近</small>',
                 total: '全雲量<small>空全体</small>',
                 upper: '上層<small>5500m付近〜</small>',
                 middle: '中層<small>1500〜5500m付近</small>',
@@ -1181,7 +1509,58 @@
                 };
                 label.addTo(maps[type]);
             }
-            
+
+            // 配色の凡例（左下）。連続量（風・降水）は帯、区分（雷）はマス。
+            // 色の値は msm.js / nowcast.js の実装と重複するが、凡例のためだけに
+            // nowcast.js を先読みしたくない（降水・雷タブを開くまで1リクエストも出さない設計）ので、
+            // ここでは値を直接持つ
+
+            // 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）
+            function legendBar(colors, labels, unit) {
+                const swatches = colors.map((c) => `<i style="background:${c}"></i>`).join('');
+                const n = colors.length;
+                const ticks = labels.map((label, i) => `<span style="left:${(i + 1) / n * 100}%">${label}</span>`).join('');
+                return `<div class="legend-bar">${swatches}</div><div class="legend-ticks">${ticks}</div><div class="legend-caption">${unit}</div>`;
+            }
+
+            const LEGENDS = {
+                // 気象庁の風の強さの分類。色は msm.js の WIND_STEPS と同じ値（アルファ込み）。
+                // 2 m/s未満は地図上では透明なので先頭に空欄を1つ足す
+                wind: legendBar(
+                    [
+                        'transparent',
+                        'rgba(27,74,107,0.51)',
+                        'rgba(47,143,176,0.59)',
+                        'rgba(245,208,32,0.69)',
+                        'rgba(245,144,32,0.75)',
+                        'rgba(232,64,44,0.80)',
+                        'rgba(166,60,201,0.84)'
+                    ],
+                    [2, 5, 10, 15, 20, 30], 'm/s'
+                ),
+                // 気象庁の高解像度降水ナウキャストの凡例（mm/h）を実測した値
+                rain: legendBar(
+                    ['#f2f2ff', '#a0d2ff', '#218cff', '#0041ff', '#faf500', '#ff9900', '#ff2800', '#b40068'],
+                    [1, 5, 10, 20, 30, 50, 80], 'mm/h'
+                ),
+                // 気象庁の雷ナウキャストの活動度1〜4（気象庁「雷ナウキャストの見方」の凡例を実測した色）
+                thunder: '<div class="legend-levels">'
+                    + '<i style="background:#faf500" title="雷可能性あり">1</i>'
+                    + '<i style="background:#ffaa00" title="雷あり">2</i>'
+                    + '<i style="background:#ff2800" title="やや激しい雷">3</i>'
+                    + '<i style="background:#c800ff" title="激しい雷">4</i>'
+                    + '</div>'
+            };
+            for (const [type, html] of Object.entries(LEGENDS)) {
+                const legend = L.control({ position: 'bottomleft' });
+                legend.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'map-legend');
+                    div.innerHTML = html;
+                    return div;
+                };
+                legend.addTo(maps[type]);
+            }
+
             // マップのサイズを再計算（複数マップの場合に必要）
             setTimeout(() => {
                 Object.values(maps).forEach((map) => map.invalidateSize());
@@ -1363,7 +1742,10 @@
             let currentFrame = null;
             
             Object.keys(maps).forEach((type) => {
-                layers[type] = new msm.CloudGridLayer().addTo(maps[type]);
+                if (type === 'rain') return; // 降水は別の時間軸なので別管理
+                layers[type] = type === 'wind'
+                    ? new msm.WindGridLayer().addTo(maps[type])
+                    : new msm.CloudGridLayer().addTo(maps[type]);
             });
             
             return {
@@ -1377,7 +1759,14 @@
                     if (!cell) return null;
                     const i = cell.iy * msm.GRID.nx + cell.ix;
                     const value = (type) => currentFrame[type][i] === msm.MISSING ? null : currentFrame[type][i];
-                    return { total: value('total'), upper: value('upper'), middle: value('middle'), lower: value('lower') };
+                    const w = currentFrame.wind;
+                    return {
+                        total: value('total'), upper: value('upper'), middle: value('middle'), lower: value('lower'),
+                        // 格子に持っているのは「吹いていく向き」。
+                        // 気象でいう風向は「吹いてくる向き」なので180°反転してから表示する
+                        windSpeed: w ? w.speed[i] * msm.WIND_SPEED_UNIT : null,
+                        windFrom: w ? (270 - w.direction[i] / 256 * 360 + 720) % 360 : null
+                    };
                 },
                 
                 async show(time) {
@@ -1393,7 +1782,7 @@
                     if (requestedTime !== time) return;
                     currentFrame = frame;
                     markDataFetched();
-                    Object.keys(maps).forEach((type) => layers[type].setValues(frame[type]));
+                    Object.keys(layers).forEach((type) => layers[type].setValues(frame[type]));
                     onFrame();
                     
                     // 次のコマを先読み
@@ -1633,6 +2022,301 @@
             });
         }
         
+        // 降水・雷ナウキャスト共通のタイムラインエンジン。雲量とは時間軸が違うので、
+        // コマ送りも表示も独立して持つ。frames の取得方法とコマごとの描画（タイル差し替え・
+        // マーカー更新など）だけ呼び出し側で差し替える。スクロール・スナップ・再生・
+        // レイアウトの計算はここに1箇所だけ持つ
+        async function createTimeline({ loadFrames, renderFrame, onFramesLoaded }) {
+            const viewport = document.getElementById('nowcast-viewport');
+            const strip = document.getElementById('nowcast-strip');
+            const ticks = document.getElementById('nowcast-ticks');
+            const axis = document.getElementById('nowcast-axis');
+            const head = document.getElementById('nowcast-head');
+            const playButton = document.getElementById('nowcast-play');
+            const resetButton = document.getElementById('nowcast-reset');
+
+            // 1コマの幅。15分（3コマ）おきのラベルが重ならない間隔にしてある
+            const STEP_PX = 26;
+            const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+            const hhmm = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+            let frames = [];
+            let index = 0;
+            let timer = null;
+            let scrolling = false; // 自分でスクロールさせている間は反応しない
+
+            function render() {
+                const frame = frames[index];
+                if (!frame) return;
+                renderFrame(frame);
+                const d = frame.time;
+                head.innerHTML = `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]}) <b>${hhmm(d)}</b>`
+                    + `<span class="kind" data-forecast="${frame.isForecast}">${frame.isForecast ? '予測' : '実況'}</span>`;
+                viewport.setAttribute('aria-valuetext', `${hhmm(d)} ${frame.isForecast ? '予測' : '実況'}`);
+            }
+
+            // コマを中央へ持ってくる
+            function show(i, smooth) {
+                if (!frames.length) return;
+                const next = Math.max(0, Math.min(frames.length - 1, i));
+                if (next !== index) {
+                    index = next;
+                    render();
+                }
+                scrolling = true;
+                viewport.scrollTo({ left: index * STEP_PX, behavior: smooth ? 'smooth' : 'auto' });
+                setTimeout(() => { scrolling = false; }, smooth ? 400 : 80);
+            }
+
+            // 中央に来ているコマを読み取る。
+            // メモリの間隔はデータの間隔（5分）そのものなので、途中で止まると
+            // どの時刻を指しているのか分からなくなる。スクロールが止まったら
+            // 最寄りのコマへ smooth スナップする（フリースクロール自体は妨げない）
+            let snapTimer = null;
+            function onScroll() {
+                if (scrolling || !frames.length) return;
+                const i = Math.max(0, Math.min(frames.length - 1, Math.round(viewport.scrollLeft / STEP_PX)));
+                if (i !== index) {
+                    index = i;
+                    render();
+                }
+                clearTimeout(snapTimer);
+                snapTimer = setTimeout(() => show(index, true), 120);
+            }
+
+            const nowIndex = () => {
+                const last = frames.map((f) => f.isForecast).lastIndexOf(false);
+                return last < 0 ? 0 : last;
+            };
+
+            function stop() {
+                if (!timer) return;
+                clearInterval(timer);
+                timer = null;
+                playButton.textContent = '▶';
+                playButton.setAttribute('aria-label', '再生');
+            }
+
+            function play() {
+                if (timer) return stop();
+                if (index >= frames.length - 1) show(0);
+                playButton.textContent = '■';
+                playButton.setAttribute('aria-label', '停止');
+                timer = setInterval(() => show(index >= frames.length - 1 ? 0 : index + 1), 350);
+            }
+
+            // カーソルは viewport の中央に固定してあるので、
+            // 最初と最後のコマもそこまで来られるよう前後に画面半分ぶんの余白をとる。
+            // 余白は目盛り層を右へずらすことで作る（padding では目盛りが動かない）
+            function layout() {
+                const pad = viewport.clientWidth / 2;
+                if (!pad) return; // 隠れている間は幅を測れない。表示されたときに測り直す
+                ticks.style.left = `${pad}px`;
+                strip.style.width = `${(frames.length - 1) * STEP_PX + pad * 2}px`;
+                show(index);
+            }
+
+            function buildStrip() {
+                const boundary = nowIndex();
+                const x = (i) => i * STEP_PX;
+                let html = `<div class="nowcast-rail" style="width:${x(frames.length - 1)}px"></div>`;
+
+                frames.forEach((frame, i) => {
+                    const major = frame.time.getMinutes() % 15 === 0;
+                    const isNow = i === boundary;
+                    html += `<div class="nowcast-tick${isNow ? ' now' : major ? ' major' : ''}" style="left:${x(i)}px"></div>`;
+                    if (isNow) {
+                        html += `<div class="nowcast-label now" style="left:${x(i)}px">現在</div>`;
+                    } else if (major) {
+                        html += `<div class="nowcast-label" style="left:${x(i)}px">${hhmm(frame.time)}</div>`;
+                    }
+                });
+                axis.innerHTML = html;
+            }
+
+            viewport.addEventListener('scroll', onScroll, { passive: true });
+
+            // PCはホイールでもドラッグでも動かせるように
+            let dragFrom = null;
+            viewport.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'touch') return; // タッチは既定のスクロールに任せる
+                dragFrom = { x: e.clientX, left: viewport.scrollLeft };
+                viewport.setPointerCapture(e.pointerId);
+                stop();
+            });
+            viewport.addEventListener('pointermove', (e) => {
+                if (!dragFrom) return;
+                viewport.scrollLeft = dragFrom.left - (e.clientX - dragFrom.x);
+            });
+            const endDrag = () => { if (dragFrom) { dragFrom = null; show(index, true); } };
+            viewport.addEventListener('pointerup', endDrag);
+            viewport.addEventListener('pointercancel', endDrag);
+
+            viewport.addEventListener('keydown', (e) => {
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                e.preventDefault();
+                stop();
+                show(index + (e.key === 'ArrowRight' ? 1 : -1), true);
+            });
+
+            window.addEventListener('resize', () => { if (frames.length) layout(); });
+            playButton.addEventListener('click', play);
+            resetButton.addEventListener('click', () => { stop(); show(nowIndex(), true); });
+
+            return {
+                stop,
+                get frames() { return frames; },
+                // タブに切り替わるたびに呼ばれる。取得は最初の1回だけだが、
+                // 隠れている間のリサイズでは幅を測れないので、配置は毎回やり直す
+                async load() {
+                    if (!frames.length) {
+                        frames = await loadFrames();
+                        buildStrip();
+                        index = nowIndex();
+                        render();
+                        markDataFetched();
+                        if (onFramesLoaded) onFramesLoaded(frames);
+                    }
+                    layout();
+                }
+            };
+        }
+
+        // 降水ナウキャスト
+        async function createNowcastRain() {
+            const nc = await import('./nowcast.js');
+            const layer = nc.createLayer().addTo(maps.rain);
+            const rainBars = document.getElementById('nowcast-rain');
+
+            // ピンの地点に雨が降るかどうかを、時間軸に重ねた帯で示す。
+            // 1コマにつきタイル1枚（実測で1KB前後）を読んで、その地点の画素の色をそのまま帯の色にする。
+            // 強さは色だけで表し、太さや長さは変えない（コントロールを小さく保つため）
+            const STEP_PX = 26;
+            let pinPoint = null;
+            let sampleToken = 0;
+
+            async function drawRain() {
+                const token = ++sampleToken;
+                const frames = timeline.frames;
+                if (!pinPoint || !frames.length) {
+                    rainBars.innerHTML = '';
+                    return;
+                }
+                const ranks = await Promise.all(
+                    frames.map((frame) => nc.sampleAt(frame, pinPoint.lat, pinPoint.lng))
+                );
+                if (token !== sampleToken) return; // 読んでいる間にピンが動いた
+
+                // 1コマぶんの幅をそのまま使うので、降り続く時間は切れ目のない帯になる
+                rainBars.innerHTML = frames.map((frame, i) => {
+                    if (!ranks[i]) return '';
+                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
+                        + `width:${STEP_PX}px;background:${nc.intensityColor(ranks[i])}"></div>`;
+                }).join('');
+            }
+
+            const timeline = await createTimeline({
+                loadFrames: () => nc.loadFrames(),
+                renderFrame: (frame) => layer.setUrl(nc.tileUrl(frame))
+            });
+
+            return {
+                stop: timeline.stop,
+                // タブに切り替わるたびに呼ばれる。#nowcast-rain は雷タブと共有しているので、
+                // フレーム取得が済んでいても帯は毎回描き直す
+                async load() {
+                    await timeline.load();
+                    drawRain();
+                },
+                // ピンが動いたら、その地点の降水強度を読み直す
+                setPin(pin) {
+                    pinPoint = pin ? { lat: pin.lat, lng: pin.lng } : null;
+                    drawRain();
+                }
+            };
+        }
+
+        // 雷ナウキャスト。面（thns）と落雷地点（liden）を重ねる。
+        // _clampZoom の偶数ズーム対策は nc.createLayer() 経由で降水と共有している
+        async function createNowcastThunder() {
+            const nc = await import('./nowcast.js');
+            const areaLayer = nc.createLayer().addTo(maps.thunder);
+            const markers = L.layerGroup().addTo(maps.thunder);
+            // #nowcast-rain は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
+            // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）
+            const bars = document.getElementById('nowcast-rain');
+            const STEP_PX = 26;
+            let strikeToken = 0;
+            let pinPoint = null;
+            let sampleToken = 0;
+
+            async function renderFrame(frame) {
+                // thns が無いコマ（liden だけの5分刻み）では面を更新しない。
+                // 直前のコマの面がそのまま残るだけで、データを捏造することにはならない
+                if (frame.hasArea) areaLayer.setUrl(nc.thunderTileUrl(frame));
+
+                const token = ++strikeToken;
+                const features = await nc.loadStrikes(frame);
+                if (token !== strikeToken) return; // 読んでいる間にコマが進んだ
+                markers.clearLayers();
+                for (const feature of features) {
+                    const [lng, lat] = feature.geometry.coordinates;
+                    L.circleMarker([lat, lng], {
+                        radius: 4,
+                        weight: 1,
+                        color: '#3a2f00',
+                        fillColor: '#ffe066',
+                        fillOpacity: 0.9
+                    }).bindTooltip(feature.properties.obstimeJST || '').addTo(markers);
+                }
+            }
+
+            // ピンの地点の雷活動度（thns）を、時間軸に重ねた帯で示す。降水の drawRain と同じ考え方
+            async function drawActivity() {
+                const token = ++sampleToken;
+                const frames = timeline.frames;
+                if (!pinPoint || !frames.length) {
+                    bars.innerHTML = '';
+                    return;
+                }
+                const levels = await Promise.all(
+                    frames.map((frame) => nc.sampleThunderAt(frame, pinPoint.lat, pinPoint.lng))
+                );
+                if (token !== sampleToken) return; // 読んでいる間にピンが動いた
+
+                // thns は10分刻みなので、間の5分（liden だけのコマ）には値が無い。
+                // 面レイヤーもデータの無いコマでは直前のコマを表示し続けているので、
+                // 帯もそれに揃えて直前の値を引き継ぐ（新しい値を作るのではなく、表示を地図に合わせるだけ）
+                let carry = 0;
+                const shown = levels.map((level, i) => {
+                    if (frames[i].hasArea) carry = level;
+                    return frames[i].hasArea ? level : carry;
+                });
+
+                bars.innerHTML = frames.map((frame, i) => {
+                    if (!shown[i]) return '';
+                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
+                        + `width:${STEP_PX}px;background:${nc.thunderActivityColor(shown[i])}"></div>`;
+                }).join('');
+            }
+
+            const timeline = await createTimeline({ loadFrames: () => nc.loadThunderFrames(), renderFrame });
+
+            return {
+                stop: timeline.stop,
+                // タブに切り替わるたびに呼ばれる。#nowcast-rain は降水タブと共有しているので、
+                // フレーム取得が済んでいても帯は毎回描き直す
+                async load() {
+                    await timeline.load();
+                    drawActivity();
+                },
+                setPin(pin) {
+                    pinPoint = pin ? { lat: pin.lat, lng: pin.lng } : null;
+                    drawActivity();
+                }
+            };
+        }
+        
         // 雲量地図で選んでいる時刻の列を赤線で囲み、その列まで横スクロールする。
         // 同じMSMの同じ時刻である1時間予測だけが対象（2週間予測は別のモデル）
         function highlightForecastTime(utcTime) {
@@ -1774,6 +2458,10 @@
             document.getElementById('search-toggle-btn').setAttribute('aria-expanded', String(!collapsed));
         }
         
+        // 風向の表示に使う16方位（風が吹いてくる向き）
+        const COMPASS_16 = ['北', '北北東', '北東', '東北東', '東', '東南東', '南東', '南南東',
+                            '南', '南南西', '南西', '西南西', '西', '西北西', '北西', '北北西'];
+        
         // 操作パネルの「📍地点名 上12 / 中40 / 下80%」
         function updatePinInfo() {
             const info = document.getElementById('pin-info');
@@ -1790,10 +2478,20 @@
             } else if (values) {
                 const fmt = (v) => v === null ? '−' : String(v);
                 const cell = (label, v) => `<span class="layer">${label}</span><b>${fmt(v)}</b>`;
-                html = mapView === 'total'
-                    ? cell('全雲量', values.total)
-                    : [cell('上', values.upper), cell('中', values.middle), cell('下', values.lower)].join(' ');
-                html += '<span class="unit">%</span>';
+                if (mapView === 'rain' || mapView === 'thunder') {
+                    // 降水はタイムラインの棒グラフで時間ごとに見せている。雷は時刻ごとの値を持たない
+                    html = '';
+                } else if (mapView === 'wind') {
+                    html = values.windSpeed === null
+                        ? '<span class="layer">−</span>'
+                        : `<span class="layer">${COMPASS_16[Math.round(values.windFrom / 22.5) % 16]}の風</span>`
+                          + `<b>${values.windSpeed.toFixed(1)}</b><span class="unit">m/s</span>`;
+                } else {
+                    html = mapView === 'total'
+                        ? cell('全雲量', values.total)
+                        : [cell('上', values.upper), cell('中', values.middle), cell('下', values.lower)].join(' ');
+                    html += '<span class="unit">%</span>';
+                }
             }
             document.getElementById('pin-values').innerHTML = html;
         }
@@ -1805,6 +2503,20 @@
             document.querySelectorAll('.layer-tab').forEach((tab) => {
                 tab.setAttribute('aria-selected', String(tab.dataset.view === view));
             });
+            
+            // 時間軸が違うので、コントロールごと入れ替える。
+            // 同時に2つ見えると、どちらが効いているのか分からなくなる
+            const isNowcast = view === 'rain' || view === 'thunder';
+            document.querySelector('.time-select-container').hidden = isNowcast;
+            document.getElementById('nowcast-timeline').hidden = !isNowcast;
+            if (nowcastRain) {
+                if (view === 'rain') nowcastRain.load().catch((e) => console.error('降水ナウキャストを取得できませんでした', e));
+                else nowcastRain.stop();
+            }
+            if (nowcastThunder) {
+                if (view === 'thunder') nowcastThunder.load().catch((e) => console.error('雷ナウキャストを取得できませんでした', e));
+                else nowcastThunder.stop();
+            }
             // 隠れていた地図は大きさを持っていないので測り直す
             Object.values(maps).forEach((map) => map.invalidateSize());
             updatePinInfo();
@@ -1910,6 +2622,8 @@
         function initPin() {
             pinController = new PinController(maps, (pin) => {
                 setSearchCollapsed(!!pin);
+                if (nowcastRain) nowcastRain.setPin(pin);
+                if (nowcastThunder) nowcastThunder.setPin(pin);
                 updatePinInfo();
                 refreshTimeLabels();
                 updateForecast(pin);
@@ -1992,6 +2706,15 @@
             
             // 時間の経過で「過ぎた時刻」が増えるので、定期的に付け直す
             setInterval(markPastCells, 60 * 1000);
+            
+            nowcastRain = await createNowcastRain();
+            // URL で指定されたピンは、ここに来る前に置かれていることがある
+            nowcastRain.setPin(pinController && pinController.pin);
+            if (mapView === 'rain') nowcastRain.load().catch(() => {});
+
+            nowcastThunder = await createNowcastThunder();
+            nowcastThunder.setPin(pinController && pinController.pin);
+            if (mapView === 'thunder') nowcastThunder.load().catch(() => {});
             
             cloudSource = await createMsmSource(updatePinInfo);
             
