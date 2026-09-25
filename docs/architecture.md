@@ -6,10 +6,14 @@ GitHub Pages に置いた静的ファイルだけで動きます。サーバー�
 
 | ファイル | 役割 |
 |---|---|
-| `index.html` | 画面のすべて（HTML・CSS・画面まわりの JavaScript） |
+| `index.html` | 画面の骨格（マークアップ） |
+| `styles.css` | 画面のスタイル |
+| `app.js` | 画面まわりの JavaScript（地図の初期化・表・ナウキャストのタイムラインなど） |
 | `msm.js` | 雲量の地図。`.om` ファイルの読み込みと、Leaflet への描画 |
+| `nowcast.js` | 降水・雷ナウキャストのタイルと地点サンプリング |
 | `pin.js` | 地点ピン（置く・動かす・同期）と場所検索、緯度経度の読み取り |
 | `weather.js` | 地点の予測値と気象庁の週間予報の取得、天気コードの対応表 |
+| `colors.js` | 地図の配色定数（凡例と描画で共有） |
 | `docs/legend.svg` | README に載せる色の凡例（手で編集せず、作り直す） |
 
 外部ライブラリは CDN から読み込みます（Leaflet、SunCalc、`@openmeteo/file-reader`）。`@openmeteo/file-reader` は README に「本番向けではない」と書かれているため、`index.html` の import map で版を固定しています。
@@ -35,7 +39,7 @@ GitHub Pages に置いた静的ファイルだけで動きます。サーバー�
 - `reverseGeocodeAddress()` は緯度経度を「東京都千代田区」にします。政令指定都市は区まで出ず市止まり（気象庁側に区が無いため）、海上・国外・境界未定地域では `null` を返します。
 - 天気コードとアイコンのファイル名は一致しません（118コード中88コードが別名）。`WEATHER_TELOPS` に対応表を持っています。
 
-## 表の作り方（`index.html`）
+## 表の作り方（`app.js`）
 
 - 行が項目、列が時刻。左端の項目名は `position: sticky` で固定し、枠線は「セルの右と下」に引いています（`border-collapse: collapse` だと固定列の左右の線が流れるため）。
 - 日付の行は同じ日をまとめた1セルで、中のラベルを `position: sticky` にして次の日まで追従させます。

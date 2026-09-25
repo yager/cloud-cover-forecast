@@ -10,7 +10,7 @@
 // アプリ本体は「ネットワーク優先・失敗したらキャッシュ」にしてある。
 // キャッシュ優先にすると古い版に固定されて更新が届かなくなるため、速度より確実さを取っている。
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 
 const SHELL = `ccf-shell-${VERSION}`; // 同オリジンのアプリ本体。オフライン時の控え
 const LIB = 'ccf-lib-v1';             // 版を固定してある外部ライブラリ
@@ -26,7 +26,16 @@ self.addEventListener('install', (event) => {
     // 本体は毎回取り直すので、ここではオフライン時の控えを用意するだけ
     event.waitUntil((async () => {
         const cache = await caches.open(SHELL);
-        await cache.addAll(['./', './msm.js', './pin.js', './weather.js', './colors.js']);
+        await cache.addAll([
+            './',
+            './styles.css',
+            './app.js',
+            './msm.js',
+            './nowcast.js',
+            './pin.js',
+            './weather.js',
+            './colors.js'
+        ]);
         await self.skipWaiting();
     })());
 });
