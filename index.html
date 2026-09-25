@@ -138,7 +138,6 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 10px;
         }
         
         .site-header h1 {
@@ -1094,15 +1093,6 @@
                 --maps-width: calc(3 * var(--map-width) + 70px);
             }
 
-            .site-header {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                column-gap: 24px;
-                row-gap: 8px;
-                padding: 10px 0 10px 10px;
-            }
-            
             .time-select {
                 width: 220px;
                 flex: none;
@@ -1135,7 +1125,6 @@
             }
 
             .site-header-title {
-                margin-bottom: 0;
                 gap: 16px;
             }
 
@@ -1352,6 +1341,9 @@
             loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
             reverseGeocodeAddress, jstKey, formatDateLabel, formatHourLabel
         } from './weather.js';
+        // 副作用の無い色の定数だけ。凡例のためだけに nowcast.js を先読みしたくないので、
+        // msm.js / nowcast.js と共有しているこのファイルだけを読む
+        import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, THUNDER_COLORS, THUNDER_LABELS } from './colors.js';
         
         // マップオブジェクト
         const maps = {
@@ -1511,9 +1503,7 @@
             }
 
             // 配色の凡例（左下）。連続量（風・降水）は帯、区分（雷）はマス。
-            // 色の値は msm.js / nowcast.js の実装と重複するが、凡例のためだけに
-            // nowcast.js を先読みしたくない（降水・雷タブを開くまで1リクエストも出さない設計）ので、
-            // ここでは値を直接持つ
+            // 色の値は colors.js を参照する（msm.js / nowcast.js の実装と同じ値）
 
             // 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）
             function legendBar(colors, labels, unit) {
@@ -1523,33 +1513,19 @@
                 return `<div class="legend-bar">${swatches}</div><div class="legend-ticks">${ticks}</div><div class="legend-caption">${unit}</div>`;
             }
 
+            // WIND_STEPS は強い順（WindGridLayer の検索順）なので、凡例用に弱い順へ並べ替える。
+            // 2 m/s未満は地図上では透明なので先頭に空欄を1つ足す
+            const windAscending = [...WIND_STEPS].reverse();
+
             const LEGENDS = {
-                // 気象庁の風の強さの分類。色は msm.js の WIND_STEPS と同じ値（アルファ込み）。
-                // 2 m/s未満は地図上では透明なので先頭に空欄を1つ足す
                 wind: legendBar(
-                    [
-                        'transparent',
-                        'rgba(27,74,107,0.51)',
-                        'rgba(47,143,176,0.59)',
-                        'rgba(245,208,32,0.69)',
-                        'rgba(245,144,32,0.75)',
-                        'rgba(232,64,44,0.80)',
-                        'rgba(166,60,201,0.84)'
-                    ],
-                    [2, 5, 10, 15, 20, 30], 'm/s'
+                    ['transparent', ...windAscending.map((s) => `rgba(${s.rgba[0]},${s.rgba[1]},${s.rgba[2]},${(s.rgba[3] / 255).toFixed(2)})`)],
+                    windAscending.map((s) => s.min), 'm/s'
                 ),
-                // 気象庁の高解像度降水ナウキャストの凡例（mm/h）を実測した値
-                rain: legendBar(
-                    ['#f2f2ff', '#a0d2ff', '#218cff', '#0041ff', '#faf500', '#ff9900', '#ff2800', '#b40068'],
-                    [1, 5, 10, 20, 30, 50, 80], 'mm/h'
-                ),
-                // 気象庁の雷ナウキャストの活動度1〜4（気象庁「雷ナウキャストの見方」の凡例を実測した色）
-                thunder: '<div class="legend-levels">'
-                    + '<i style="background:#faf500" title="雷可能性あり">1</i>'
-                    + '<i style="background:#ffaa00" title="雷あり">2</i>'
-                    + '<i style="background:#ff2800" title="やや激しい雷">3</i>'
-                    + '<i style="background:#c800ff" title="激しい雷">4</i>'
-                    + '</div>'
+                rain: legendBar(RAIN_COLORS.map((hex) => `#${hex}`), RAIN_THRESHOLDS, 'mm/h'),
+                thunder: '<div class="legend-levels">' + THUNDER_COLORS.map((hex, i) =>
+                    `<i style="background:#${hex}" title="${THUNDER_LABELS[i]}">${i + 1}</i>`
+                ).join('') + '</div>'
             };
             for (const [type, html] of Object.entries(LEGENDS)) {
                 const legend = L.control({ position: 'bottomleft' });
@@ -2026,7 +2002,7 @@
         // コマ送りも表示も独立して持つ。frames の取得方法とコマごとの描画（タイル差し替え・
         // マーカー更新など）だけ呼び出し側で差し替える。スクロール・スナップ・再生・
         // レイアウトの計算はここに1箇所だけ持つ
-        async function createTimeline({ loadFrames, renderFrame, onFramesLoaded }) {
+        async function createTimeline({ loadFrames, renderFrame }) {
             const viewport = document.getElementById('nowcast-viewport');
             const strip = document.getElementById('nowcast-strip');
             const ticks = document.getElementById('nowcast-ticks');
@@ -2175,9 +2151,58 @@
                         index = nowIndex();
                         render();
                         markDataFetched();
-                        if (onFramesLoaded) onFramesLoaded(frames);
                     }
                     layout();
+                }
+            };
+        }
+
+        // ピンの地点の値を、時間軸に重ねた帯で示す。降水・雷で共通のロジック
+        // （1コマぶんの幅をそのまま使うので、続く時間は切れ目のない帯になる。
+        // 強さは色だけで表し、太さや長さは変えない＝コントロールを小さく保つ）。
+        // sample(frame, lat, lng) は階級（0は「無し」）を返す非同期関数、color(rank) はその表示色。
+        // hasData(frame) を渡すと、false のコマは直前の値を引き継いで表示する
+        // （面レイヤーもデータの無いコマは直前のコマを表示し続けているので、それに揃えるだけ。
+        // 新しい値を作っているわけではない）。省略時は毎コマの値をそのまま使う（降水はこちら）
+        function createPinBar(el, sample, color, hasData) {
+            const STEP_PX = 26;
+            let frames = [];
+            let pinPoint = null;
+            let token = 0;
+
+            async function draw() {
+                const my = ++token;
+                if (!pinPoint || !frames.length) {
+                    el.innerHTML = '';
+                    return;
+                }
+                const values = await Promise.all(frames.map((frame) => sample(frame, pinPoint.lat, pinPoint.lng)));
+                if (my !== token) return; // 読んでいる間にピンが動いた/コマが変わった
+
+                let shown = values;
+                if (hasData) {
+                    let carry = 0;
+                    shown = values.map((v, i) => {
+                        if (hasData(frames[i])) carry = v;
+                        return hasData(frames[i]) ? v : carry;
+                    });
+                }
+
+                el.innerHTML = frames.map((frame, i) => {
+                    if (!shown[i]) return '';
+                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
+                        + `width:${STEP_PX}px;background:${color(shown[i])}"></div>`;
+                }).join('');
+            }
+
+            return {
+                setFrames(newFrames) {
+                    frames = newFrames;
+                    draw();
+                },
+                setPin(pin) {
+                    pinPoint = pin ? { lat: pin.lat, lng: pin.lng } : null;
+                    draw();
                 }
             };
         }
@@ -2186,34 +2211,7 @@
         async function createNowcastRain() {
             const nc = await import('./nowcast.js');
             const layer = nc.createLayer().addTo(maps.rain);
-            const rainBars = document.getElementById('nowcast-rain');
-
-            // ピンの地点に雨が降るかどうかを、時間軸に重ねた帯で示す。
-            // 1コマにつきタイル1枚（実測で1KB前後）を読んで、その地点の画素の色をそのまま帯の色にする。
-            // 強さは色だけで表し、太さや長さは変えない（コントロールを小さく保つため）
-            const STEP_PX = 26;
-            let pinPoint = null;
-            let sampleToken = 0;
-
-            async function drawRain() {
-                const token = ++sampleToken;
-                const frames = timeline.frames;
-                if (!pinPoint || !frames.length) {
-                    rainBars.innerHTML = '';
-                    return;
-                }
-                const ranks = await Promise.all(
-                    frames.map((frame) => nc.sampleAt(frame, pinPoint.lat, pinPoint.lng))
-                );
-                if (token !== sampleToken) return; // 読んでいる間にピンが動いた
-
-                // 1コマぶんの幅をそのまま使うので、降り続く時間は切れ目のない帯になる
-                rainBars.innerHTML = frames.map((frame, i) => {
-                    if (!ranks[i]) return '';
-                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
-                        + `width:${STEP_PX}px;background:${nc.intensityColor(ranks[i])}"></div>`;
-                }).join('');
-            }
+            const pinBar = createPinBar(document.getElementById('nowcast-rain'), nc.sampleAt, nc.intensityColor);
 
             const timeline = await createTimeline({
                 loadFrames: () => nc.loadFrames(),
@@ -2226,13 +2224,9 @@
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
                     await timeline.load();
-                    drawRain();
+                    pinBar.setFrames(timeline.frames);
                 },
-                // ピンが動いたら、その地点の降水強度を読み直す
-                setPin(pin) {
-                    pinPoint = pin ? { lat: pin.lat, lng: pin.lng } : null;
-                    drawRain();
-                }
+                setPin: pinBar.setPin
             };
         }
 
@@ -2243,16 +2237,17 @@
             const areaLayer = nc.createLayer().addTo(maps.thunder);
             const markers = L.layerGroup().addTo(maps.thunder);
             // #nowcast-rain は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
-            // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）
-            const bars = document.getElementById('nowcast-rain');
-            const STEP_PX = 26;
+            // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）。
+            // thns が無いコマ（liden だけの5分刻み）は直前の値を引き継ぐ
+            const pinBar = createPinBar(
+                document.getElementById('nowcast-rain'), nc.sampleThunderAt, nc.thunderActivityColor,
+                (frame) => frame.hasArea
+            );
             let strikeToken = 0;
-            let pinPoint = null;
-            let sampleToken = 0;
 
             async function renderFrame(frame) {
-                // thns が無いコマ（liden だけの5分刻み）では面を更新しない。
-                // 直前のコマの面がそのまま残るだけで、データを捏造することにはならない
+                // thns が無いコマでは面を更新しない。直前のコマの面がそのまま残るだけで、
+                // データを捏造することにはならない（ピン帯も同じ考え方で揃えてある）
                 if (frame.hasArea) areaLayer.setUrl(nc.thunderTileUrl(frame));
 
                 const token = ++strikeToken;
@@ -2271,35 +2266,6 @@
                 }
             }
 
-            // ピンの地点の雷活動度（thns）を、時間軸に重ねた帯で示す。降水の drawRain と同じ考え方
-            async function drawActivity() {
-                const token = ++sampleToken;
-                const frames = timeline.frames;
-                if (!pinPoint || !frames.length) {
-                    bars.innerHTML = '';
-                    return;
-                }
-                const levels = await Promise.all(
-                    frames.map((frame) => nc.sampleThunderAt(frame, pinPoint.lat, pinPoint.lng))
-                );
-                if (token !== sampleToken) return; // 読んでいる間にピンが動いた
-
-                // thns は10分刻みなので、間の5分（liden だけのコマ）には値が無い。
-                // 面レイヤーもデータの無いコマでは直前のコマを表示し続けているので、
-                // 帯もそれに揃えて直前の値を引き継ぐ（新しい値を作るのではなく、表示を地図に合わせるだけ）
-                let carry = 0;
-                const shown = levels.map((level, i) => {
-                    if (frames[i].hasArea) carry = level;
-                    return frames[i].hasArea ? level : carry;
-                });
-
-                bars.innerHTML = frames.map((frame, i) => {
-                    if (!shown[i]) return '';
-                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
-                        + `width:${STEP_PX}px;background:${nc.thunderActivityColor(shown[i])}"></div>`;
-                }).join('');
-            }
-
             const timeline = await createTimeline({ loadFrames: () => nc.loadThunderFrames(), renderFrame });
 
             return {
@@ -2308,15 +2274,12 @@
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
                     await timeline.load();
-                    drawActivity();
+                    pinBar.setFrames(timeline.frames);
                 },
-                setPin(pin) {
-                    pinPoint = pin ? { lat: pin.lat, lng: pin.lng } : null;
-                    drawActivity();
-                }
+                setPin: pinBar.setPin
             };
         }
-        
+
         // 雲量地図で選んでいる時刻の列を赤線で囲み、その列まで横スクロールする。
         // 同じMSMの同じ時刻である1時間予測だけが対象（2週間予測は別のモデル）
         function highlightForecastTime(utcTime) {

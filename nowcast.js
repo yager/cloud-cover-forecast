@@ -7,6 +7,8 @@
 // 時刻は雲量の地図（1時間刻み・78時間）とまったく別の軸（5分刻み・過去3時間〜+1時間）。
 // 1本にまとめられないので、画面側で時刻コントロールごと切り替える。
 
+import { RAIN_COLORS, THUNDER_COLORS, THUNDER_LABELS } from './colors.js';
+
 const BASE = 'https://www.jma.go.jp/bosai/jmatile/data/nowc';
 
 // 実況（レーダー観測）と予測で時刻一覧が分かれている
@@ -146,17 +148,15 @@ export async function loadStrikes(frame) {
     return geojson.features || [];
 }
 
-// 気象庁が塗った降水強度の色を、弱い順に並べたもの。
-// 日本全域 × 先15時間ぶんのタイル（降水短時間予報も同じ配色）を走査して
-// 実際に出てくる色を数えたところ、ちょうどこの8色だけで中間色は無かった。
-// 中間色が無いということは、色から階級を引き戻せるということ。
-const INTENSITY_COLORS = ['f2f2ff', 'a0d2ff', '218cff', '0041ff', 'faf500', 'ff9900', 'ff2800', 'b40068'];
+// 気象庁が塗った降水強度の色。日本全域 × 先15時間ぶんのタイル（降水短時間予報も同じ配色）を
+// 走査して実際に出てくる色を数えたところ、ちょうど8色だけで中間色は無かった。
+// 中間色が無いということは、色から階級を引き戻せるということ。値は colors.js を参照
 
 export function intensityColor(rank) {
-    return `#${INTENSITY_COLORS[rank - 1]}`;
+    return `#${RAIN_COLORS[rank - 1]}`;
 }
 
-const RANK_BY_RGB = new Map(INTENSITY_COLORS.map((hex, i) => [parseInt(hex, 16), i + 1]));
+const RANK_BY_RGB = new Map(RAIN_COLORS.map((hex, i) => [parseInt(hex, 16), i + 1]));
 
 // 地点の値を読むズーム。中身のある一番細かいズーム
 const SAMPLE_ZOOM = 10;
@@ -206,9 +206,7 @@ export async function sampleAt(frame, lat, lng) {
 // 雷の活動度1〜4の色。気象庁の解説ページ「雷ナウキャストの見方」
 // (https://www.jma.go.jp/jma/kishou/know/toppuu/thunder2-2.html) の
 // 「活動度と行動の対応」表の画像から、スウォッチの画素を実測して取得した。
-// 活動度1（faf500・黄）は実際のタイルでも同じ色を確認済み
-const THUNDER_COLORS = ['faf500', 'ffaa00', 'ff2800', 'c800ff']; // 活動度1→4
-const THUNDER_LABELS = ['雷可能性あり', '雷あり', 'やや激しい雷', '激しい雷'];
+// 活動度1（faf500・黄）は実際のタイルでも同じ色を確認済み。値は colors.js を参照
 
 export function thunderActivityColor(level) {
     return `#${THUNDER_COLORS[level - 1]}`;

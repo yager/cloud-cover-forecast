@@ -26,7 +26,7 @@ self.addEventListener('install', (event) => {
     // 本体は毎回取り直すので、ここではオフライン時の控えを用意するだけ
     event.waitUntil((async () => {
         const cache = await caches.open(SHELL);
-        await cache.addAll(['./', './msm.js', './pin.js', './weather.js']);
+        await cache.addAll(['./', './msm.js', './pin.js', './weather.js', './colors.js']);
         await self.skipWaiting();
     })());
 });

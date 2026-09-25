@@ -4,6 +4,7 @@
 // どちらも「GRID 定義 + 層ごとの Uint8Array（0〜100%、MISSING=欠測、行0が南端）」だけでやり取りするので、
 // 将来 GitHub Actions で事前変換した uint8 バイナリを読むソースに差し替えても描画側はそのまま使える。
 import { OmFileReader, FileBackend, OmDataType } from '@openmeteo/file-reader';
+import { WIND_STEPS } from './colors.js';
 
 const OM_BASE = 'https://openmeteo.s3.amazonaws.com/data_spatial/jma_msm';
 
@@ -55,16 +56,8 @@ const COLOR_LUT = (() => {
 // 風速の配色。気象庁の降水の塗りと同じ「弱い=寒色、強い=暖色」にそろえる。
 // 降水と雷のタイルは気象庁が色を塗った状態で配信されるので、
 // 自分で色を決められるのは風だけ。そこだけ別のルールにすると地図の中で語彙が割れる。
-// 区切りは気象庁の風の強さの分類（10=やや強い風、15=強い風、20=非常に強い風、30=猛烈な風）。
-// 10 m/s で寒色から暖色に変え、意味の境目と色相の境目をそろえている。2 m/s 未満は透明
-const WIND_STEPS = [
-    { min: 30, rgba: [166, 60, 201, 215] },
-    { min: 20, rgba: [232, 64, 44, 205] },
-    { min: 15, rgba: [245, 144, 32, 190] },
-    { min: 10, rgba: [245, 208, 32, 175] },
-    { min: 5, rgba: [47, 143, 176, 150] },
-    { min: 2, rgba: [27, 74, 107, 130] }
-];
+// 10 m/s で寒色から暖色に変え、意味の境目と色相の境目をそろえている。
+// 値そのものは colors.js（地図の凡例と共有）を参照
 
 // speed（0.25 m/s 単位）→ RGBA。2 m/s 未満と欠測は透明
 const WIND_LUT = (() => {
