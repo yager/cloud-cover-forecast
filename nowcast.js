@@ -98,7 +98,7 @@ const ThunderAreaLayer = makeNowcastLayerClass(8);
 
 // 降水のタイル。コマを差し替えて動かすので、URL を張り替えられるようにしてある。
 // Leaflet は表示中のタイルしか取りに行かないので、先読みは画面内だけで済む
-export function createLayer() {
+export function createRainLayer() {
     return new RainLayer('', {
         opacity: 0.8,
         // 差し替え中に前のコマを消さない。ちらつきを抑える
@@ -107,7 +107,7 @@ export function createLayer() {
     });
 }
 
-// 雷の面（thns）のタイル。ズームの上限だけ createLayer と違う
+// 雷の面（thns）のタイル。ズームの上限だけ createRainLayer と違う
 export function createThunderAreaLayer() {
     return new ThunderAreaLayer('', {
         opacity: 0.8,
@@ -178,10 +178,7 @@ export async function loadStrikes(frame) {
     return geojson.features || [];
 }
 
-// 気象庁が塗った降水強度の色。日本全域 × 先15時間ぶんのタイル（降水短時間予報も同じ配色）を
-// 走査して実際に出てくる色を数えたところ、ちょうど8色だけで中間色は無かった。
-// 中間色が無いということは、色から階級を引き戻せるということ。値は colors.js を参照
-
+// 降水強度の色・階級の定義は colors.js
 export function intensityColor(rank) {
     return `#${RAIN_COLORS[rank - 1]}`;
 }
@@ -233,11 +230,7 @@ export async function sampleAt(frame, lat, lng) {
     return RANK_BY_RGB.get((rgb[0] << 16) | (rgb[1] << 8) | rgb[2]) || 0;
 }
 
-// 雷の活動度1〜4の色。気象庁の解説ページ「雷ナウキャストの見方」
-// (https://www.jma.go.jp/jma/kishou/know/toppuu/thunder2-2.html) の
-// 「活動度と行動の対応」表の画像から、スウォッチの画素を実測して取得した。
-// 活動度1（faf500・黄）は実際のタイルでも同じ色を確認済み。値は colors.js を参照
-
+// 雷活動度の色・ラベルの定義は colors.js
 export function thunderActivityColor(level) {
     return `#${THUNDER_COLORS[level - 1]}`;
 }

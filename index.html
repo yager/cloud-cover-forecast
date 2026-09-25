@@ -276,9 +276,9 @@
             height: 100%;
         }
         
-        /* その地点の降水。強さは気象庁が塗った色だけで表し、太さや長さは変えない。
+        /* ピン地点の帯（降水強度・雷活動度）。強さは色だけで表し、太さや長さは変えない。
            目盛りの手前に重ねるので、目盛りは帯の上下に突き抜けて見える */
-        .nowcast-rain {
+        .nowcast-pinbar-seg {
             position: absolute;
             top: 4px;
             height: 8px;
@@ -1244,7 +1244,7 @@
                     <div class="nowcast-track">
                         <div class="nowcast-viewport" id="nowcast-viewport" role="slider"
                              aria-label="表示する時刻" tabindex="0">
-                            <div class="nowcast-strip" id="nowcast-strip"><div class="nowcast-ticks" id="nowcast-ticks"><div class="nowcast-layer" id="nowcast-axis"></div><div class="nowcast-layer" id="nowcast-rain"></div></div></div>
+                            <div class="nowcast-strip" id="nowcast-strip"><div class="nowcast-ticks" id="nowcast-ticks"><div class="nowcast-layer" id="nowcast-axis"></div><div class="nowcast-layer" id="nowcast-pinbar"></div></div></div>
                         </div>
                         <div class="nowcast-cursor" aria-hidden="true"></div>
                     </div>
@@ -1344,8 +1344,8 @@
             loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
             reverseGeocodeAddress, jstKey, formatDateLabel, formatHourLabel
         } from './weather.js';
-        // 副作用の無い色の定数だけ。凡例のためだけに nowcast.js を先読みしたくないので、
-        // msm.js / nowcast.js と共有しているこのファイルだけを読む
+        // 副作用の無い色の定数だけ。凡例は起動時に組み立てるので、描画モジュールを待たずに
+        // msm.js / nowcast.js と同じ色を参照できるようにしてある
         import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, THUNDER_COLORS, THUNDER_LABELS } from './colors.js';
         
         // マップオブジェクト
@@ -1362,6 +1362,9 @@
         // 雲量の地図とは別の時間軸で動くナウキャスト（降水・雷）
         let nowcastRain = null;
         let nowcastThunder = null;
+        // 1コマの幅。15分（3コマ）おきのラベルが重ならない間隔にしてある。
+        // タイムラインの目盛りとピン地点の帯で共有する（片方だけ変えるとずれる）
+        const STEP_PX = 26;
         
         // 地図の表示の切り替え（total: 総雲量1枚 / layers: 上中下層の3枚）
         const PC_MEDIA = '(min-width: 1000px)';
@@ -2014,8 +2017,6 @@
             const playButton = document.getElementById('nowcast-play');
             const resetButton = document.getElementById('nowcast-reset');
 
-            // 1コマの幅。15分（3コマ）おきのラベルが重ならない間隔にしてある
-            const STEP_PX = 26;
             const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
             const hhmm = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 
@@ -2207,7 +2208,6 @@
         // （面レイヤーもデータの無いコマは直前のコマを表示し続けているので、それに揃えるだけ。
         // 新しい値を作っているわけではない）。省略時は毎コマの値をそのまま使う（降水はこちら）
         function createPinBar(el, sample, color, hasData) {
-            const STEP_PX = 26;
             let frames = [];
             let pinPoint = null;
             let token = 0;
@@ -2226,13 +2226,13 @@
                     let carry = 0;
                     shown = values.map((v, i) => {
                         if (hasData(frames[i])) carry = v;
-                        return hasData(frames[i]) ? v : carry;
+                        return carry;
                     });
                 }
 
                 el.innerHTML = frames.map((frame, i) => {
                     if (!shown[i]) return '';
-                    return `<div class="nowcast-rain" style="left:${i * STEP_PX - STEP_PX / 2}px;`
+                    return `<div class="nowcast-pinbar-seg" style="left:${i * STEP_PX - STEP_PX / 2}px;`
                         + `width:${STEP_PX}px;background:${color(shown[i])}"></div>`;
                 }).join('');
             }
@@ -2252,8 +2252,8 @@
         // 降水ナウキャスト
         async function createNowcastRain() {
             const nc = await import('./nowcast.js');
-            const layer = nc.createLayer().addTo(maps.rain);
-            const pinBar = createPinBar(document.getElementById('nowcast-rain'), nc.sampleAt, nc.intensityColor);
+            const layer = nc.createRainLayer().addTo(maps.rain);
+            const pinBar = createPinBar(document.getElementById('nowcast-pinbar'), nc.sampleAt, nc.intensityColor);
 
             const timeline = await createTimeline({
                 loadFrames: () => nc.loadFrames(),
@@ -2272,7 +2272,7 @@
                     loadToken++;
                     timeline.deactivate();
                 },
-                // タブに切り替わるたびに呼ばれる。#nowcast-rain は雷タブと共有しているので、
+                // タブに切り替わるたびに呼ばれる。#nowcast-pinbar は雷タブと共有しているので、
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
                     const my = ++loadToken;
@@ -2291,11 +2291,11 @@
             const nc = await import('./nowcast.js');
             const areaLayer = nc.createThunderAreaLayer().addTo(maps.thunder);
             const markers = L.layerGroup().addTo(maps.thunder);
-            // #nowcast-rain は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
+            // #nowcast-pinbar は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
             // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）。
             // thns が無いコマ（liden だけの5分刻み）は直前の値を引き継ぐ
             const pinBar = createPinBar(
-                document.getElementById('nowcast-rain'), nc.sampleThunderAt, nc.thunderActivityColor,
+                document.getElementById('nowcast-pinbar'), nc.sampleThunderAt, nc.thunderActivityColor,
                 (frame) => frame.hasArea
             );
             let strikeToken = 0;
@@ -2339,7 +2339,7 @@
                     loadToken++;
                     timeline.deactivate();
                 },
-                // タブに切り替わるたびに呼ばれる。#nowcast-rain は降水タブと共有しているので、
+                // タブに切り替わるたびに呼ばれる。#nowcast-pinbar は降水タブと共有しているので、
                 // フレーム取得が済んでいても帯は毎回描き直す
                 async load() {
                     const my = ++loadToken;
@@ -2504,8 +2504,9 @@
             info.hidden = !pin;
             if (!pin) return;
             
-            document.getElementById('pin-name').textContent = `📍${pin.name}`;
-            document.getElementById('pin-name').title = pin.name;
+            const nameEl = document.getElementById('pin-name');
+            nameEl.textContent = `📍${pin.name}`;
+            nameEl.title = pin.name;
             const values = cloudSource ? cloudSource.valueAt(pin.lat, pin.lng) : undefined;
             let html = '';
             if (values === null) {

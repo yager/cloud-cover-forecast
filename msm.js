@@ -191,6 +191,26 @@ export function gridIndex(lat, lng) {
     return { ix, iy, lat: GRID.lat0 + iy * GRID.dlat, lng: GRID.lon0 + ix * GRID.dlon };
 }
 
+// タイル内の各列・各行が、格子のどの列・行に当たるか（最近傍。範囲外は -1）。
+// 雲と風で同じ計算をするので1か所にまとめてある
+function gridIndices(coords, w, h) {
+    const worldPx = 256 * Math.pow(2, coords.z);
+    const cols = new Int32Array(w);
+    for (let px = 0; px < w; px++) {
+        const lng = ((coords.x + (px + 0.5) / w) / Math.pow(2, coords.z)) * 360 - 180;
+        const ix = Math.round((lng - GRID.lon0) / GRID.dlon);
+        cols[px] = ix >= 0 && ix < GRID.nx ? ix : -1;
+    }
+    const rows = new Int32Array(h);
+    for (let py = 0; py < h; py++) {
+        const yWorld = (coords.y + (py + 0.5) / h) * 256;
+        const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * yWorld) / worldPx))) * 180) / Math.PI;
+        const iy = Math.round((lat - GRID.lat0) / GRID.dlat);
+        rows[py] = iy >= 0 && iy < GRID.ny ? iy : -1;
+    }
+    return { cols, rows };
+}
+
 // 等緯度経度格子をメルカトルのタイルへ最近傍で塗る Leaflet レイヤー。
 // 補間やぼかしは一切しない（数値計算結果をそのまま色分けするだけ）。
 export const CloudGridLayer = L.GridLayer.extend({
@@ -225,21 +245,7 @@ export const CloudGridLayer = L.GridLayer.extend({
             return;
         }
 
-        // タイル内の各列・各行が、格子のどの列・行に当たるか
-        const worldPx = 256 * Math.pow(2, coords.z);
-        const cols = new Int32Array(w);
-        for (let px = 0; px < w; px++) {
-            const lng = ((coords.x + (px + 0.5) / w) / Math.pow(2, coords.z)) * 360 - 180;
-            const ix = Math.round((lng - GRID.lon0) / GRID.dlon);
-            cols[px] = ix >= 0 && ix < GRID.nx ? ix : -1;
-        }
-        const rows = new Int32Array(h);
-        for (let py = 0; py < h; py++) {
-            const yWorld = (coords.y + (py + 0.5) / h) * 256;
-            const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * yWorld) / worldPx))) * 180) / Math.PI;
-            const iy = Math.round((lat - GRID.lat0) / GRID.dlat);
-            rows[py] = iy >= 0 && iy < GRID.ny ? iy : -1;
-        }
+        const { cols, rows } = gridIndices(coords, w, h);
 
         const image = ctx.createImageData(w, h);
         const pixels = image.data;
@@ -309,23 +315,10 @@ export const WindGridLayer = L.GridLayer.extend({
         ctx.clearRect(0, 0, w, h);
         if (!this._wind) return;
 
-        const worldPx = 256 * Math.pow(2, coords.z);
         const ratio = w / this.getTileSize().x;
 
         // --- 風速の面（最近傍） ---
-        const cols = new Int32Array(w);
-        for (let px = 0; px < w; px++) {
-            const lng = ((coords.x + (px + 0.5) / w) / Math.pow(2, coords.z)) * 360 - 180;
-            const ix = Math.round((lng - GRID.lon0) / GRID.dlon);
-            cols[px] = ix >= 0 && ix < GRID.nx ? ix : -1;
-        }
-        const rows = new Int32Array(h);
-        for (let py = 0; py < h; py++) {
-            const yWorld = (coords.y + (py + 0.5) / h) * 256;
-            const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * yWorld) / worldPx))) * 180) / Math.PI;
-            const iy = Math.round((lat - GRID.lat0) / GRID.dlat);
-            rows[py] = iy >= 0 && iy < GRID.ny ? iy : -1;
-        }
+        const { cols, rows } = gridIndices(coords, w, h);
 
         const image = ctx.createImageData(w, h);
         const pixels = image.data;
