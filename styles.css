@@ -840,7 +840,7 @@ button, select, option, input {
     pointer-events: none;
 }
 
-/* 保存地点のグレー丸（赤ピンより小さく・下に潜る） */
+/* 保存地点の丸（赤ピンより小さく・下に潜る。雲タイルに溶けないシアン） */
 .place-marker {
     background: none;
     border: none;
@@ -849,7 +849,7 @@ button, select, option, input {
     display: block;
     width: 12px;
     height: 12px;
-    background: #757575;
+    background: #00acc1;
     border: 2px solid #fff;
     border-radius: 50%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);

@@ -1,4 +1,4 @@
-// 保存した地点（localStorage）。一覧UIは持たず、地図上のグレー丸とメニューだけで完結する。
+// 保存した地点（localStorage）。一覧UIは持たず、地図上の水色の丸とメニューだけで完結する。
 import { formatLatLng } from './pin.js';
 
 const STORAGE_KEY = 'ccf-places';
@@ -279,7 +279,7 @@ export class PlacesController {
         for (const group of this.groups) group.clearLayers();
 
         for (const place of this.places) {
-            // 赤ピンと同じ地点のグレー丸は隠す（重なり対策）
+            // 赤ピンと同じ地点の保存丸は隠す（重なり対策）
             if (pin && samePoint(place, pin)) continue;
 
             this.maps.forEach((map, i) => {
