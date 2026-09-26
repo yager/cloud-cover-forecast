@@ -2,6 +2,7 @@
 // データ取得そのものは msm.js / nowcast.js / weather.js / pin.js に分かれている。
 
 import { PinController, setupSearch, formatLatLng } from './pin.js';
+import { PlacesController } from './places.js';
 import {
     loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
     reverseGeocodeAddress, jstKey, formatDateLabel, formatHourLabel
@@ -45,6 +46,7 @@ const FS_EXIT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">'
 
 // 行きたい地点のピンと、雲量データのソース（init で作る）
 let pinController = null;
+let placesController = null;
 let cloudSource = null;
 
 // 雲量地図が使っている計算の基準時刻。1時間予測の表もここから始める
@@ -1168,6 +1170,9 @@ function updatePinInfo() {
     const nameEl = document.getElementById('pin-name');
     nameEl.textContent = `📍${pin.name}`;
     nameEl.title = pin.name;
+    if (placesController) {
+        placesController.updatePinActionButton(document.getElementById('pin-place-btn'));
+    }
     const values = cloudSource ? cloudSource.valueAt(pin.lat, pin.lng) : undefined;
     let html = '';
     if (values === null) {
@@ -1421,6 +1426,17 @@ function initPin() {
         refreshTimeLabels();
         updateForecast(pin);
         updateUrl(maps.lower.getCenter(), maps.lower.getZoom());
+        if (placesController) placesController.onPinChange();
+    }, {
+        onMarkerClick: (pin, map) => {
+            if (placesController) placesController.onPinMarkerClick(pin, map);
+        }
+    });
+
+    placesController = new PlacesController({
+        maps,
+        pinController,
+        reverseGeocode: reverseGeocodeAddress
     });
 
     const urlPin = getUrlParams().pin;
@@ -1429,6 +1445,9 @@ function initPin() {
     }
 
     document.getElementById('pin-clear-btn').addEventListener('click', () => pinController.clear());
+    document.getElementById('pin-place-btn').addEventListener('click', () => {
+        if (placesController) placesController.openPinAction();
+    });
 
     // 現在地ボタン。geolocation は https か localhost でしか使えないので、無ければボタンごと隠す
     const gpsButton = document.getElementById('gps-btn');

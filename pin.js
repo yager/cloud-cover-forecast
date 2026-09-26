@@ -233,11 +233,15 @@ function onLongPress(map, handler) {
 
 export class PinController {
     // maps: { key: L.Map }、onChange(pin | null): ピンが置かれた・動いた・消えたとき
-    constructor(maps, onChange) {
+    // options.onMarkerClick(pin, map): ピン本体をタップしたとき（地点メニュー用）
+    constructor(maps, onChange, options = {}) {
         this.maps = Object.values(maps);
         this.onChange = onChange;
+        this.onMarkerClick = options.onMarkerClick || null;
         this.pin = null; // { lat, lng, name }
         this.markers = [];
+        // ドラッグ直後に地図へ残る click を1回だけ無視する
+        this._suppressMapClick = false;
 
         for (const map of this.maps) {
             let lastPointerType = 'mouse';
@@ -245,13 +249,34 @@ export class PinController {
                 lastPointerType = e.pointerType;
             }, true);
 
-            // PC はクリック、スマホは長押しで置く
+            // PC はクリック、スマホは長押しで置く。
+            // 注意: 地図 click でピンを置く設計と、ドラッグ可能マーカーの click は衝突しやすい。
+            // マーカーは bubblingMouseEvents:false にし、それでもタイルへ抜けた click は
+            // 座標ヒットで「置く」を抑止してメニューへ回す（Leaflet の定石＋抜け穴対策）。
             map.on('click', (e) => {
+                if (this._suppressMapClick) {
+                    this._suppressMapClick = false;
+                    return;
+                }
+                if (this._isPinClick(e)) {
+                    if (this.pin && this.onMarkerClick) this.onMarkerClick(this.pin, map);
+                    return;
+                }
                 if (lastPointerType === 'touch') return;
                 this.set(e.latlng.lat, e.latlng.lng);
             });
             onLongPress(map, (latlng) => this.set(latlng.lat, latlng.lng));
         }
+    }
+
+    // マーカー上の click（通常）または、ドラッグ可能マーカーでタイルへ抜けた click
+    _isPinClick(e) {
+        const oe = e && e.originalEvent;
+        if (!oe) return false;
+        if (oe.target && oe.target.closest && oe.target.closest('.pin-marker')) return true;
+        if (!this.pin || !Number.isFinite(oe.clientX) || !Number.isFinite(oe.clientY)) return false;
+        const hit = document.elementFromPoint(oe.clientX, oe.clientY);
+        return !!(hit && hit.closest && hit.closest('.pin-marker'));
     }
 
     // name が無いとき（クリック・ドラッグ・緯度経度入力）は座標を表示名にする
@@ -285,8 +310,15 @@ export class PinController {
                     icon: PIN_ICON,
                     draggable: true,
                     autoPan: true,
-                    keyboard: false
+                    keyboard: false,
+                    zIndexOffset: 1000,
+                    // マーカー click を地図へ伝播させない（Leaflet の推奨）
+                    bubblingMouseEvents: false
                 }).addTo(map);
+
+                marker.on('dragstart', () => {
+                    this._suppressMapClick = true;
+                });
                 // ドラッグ中は他の地図のピンも追従させる
                 marker.on('drag', (e) => {
                     const latlng = e.target.getLatLng();
@@ -296,7 +328,13 @@ export class PinController {
                 });
                 marker.on('dragend', (e) => {
                     const latlng = e.target.getLatLng();
+                    this._suppressMapClick = true;
                     this.set(latlng.lat, latlng.lng);
+                    setTimeout(() => { this._suppressMapClick = false; }, 0);
+                });
+                marker.on('click', (e) => {
+                    L.DomEvent.stop(e);
+                    if (this.onMarkerClick) this.onMarkerClick(this.pin, map);
                 });
                 return marker;
             });

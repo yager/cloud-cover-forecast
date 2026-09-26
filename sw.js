@@ -10,7 +10,7 @@
 // アプリ本体は「ネットワーク優先・失敗したらキャッシュ」にしてある。
 // キャッシュ優先にすると古い版に固定されて更新が届かなくなるため、速度より確実さを取っている。
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 
 const SHELL = `ccf-shell-${VERSION}`; // 同オリジンのアプリ本体。オフライン時の控え
 const LIB = 'ccf-lib-v1';             // 版を固定してある外部ライブラリ
@@ -33,6 +33,7 @@ self.addEventListener('install', (event) => {
             './msm.js',
             './nowcast.js',
             './pin.js',
+            './places.js',
             './weather.js',
             './colors.js'
         ]);

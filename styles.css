@@ -779,6 +779,24 @@ button, select, option, input {
 .pin-values:empty {
     display: none;
 }
+.pin-place-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 1;
+    color: #333;
+    background: #fff;
+    border: 1px solid #b0bcc4;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.pin-place-btn:hover {
+    background: #f3f5f7;
+}
 .pin-clear-btn,
 .search-toggle-btn {
     flex-shrink: 0;
@@ -813,9 +831,138 @@ button, select, option, input {
 }
 
 .pin-marker {
+    background: none !important;
+    border: none !important;
+    pointer-events: auto;
+}
+.pin-marker svg {
+    display: block;
+    pointer-events: none;
+}
+
+/* 保存地点のグレー丸（赤ピンより小さく・下に潜る） */
+.place-marker {
     background: none;
     border: none;
 }
+.place-marker-dot {
+    display: block;
+    width: 12px;
+    height: 12px;
+    background: #757575;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
+}
+
+/* 地点メニュー（登録｜編集｜削除｜閉じる） */
+.place-menu-popup .leaflet-popup-content-wrapper {
+    padding: 0;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+.place-menu-popup .leaflet-popup-content {
+    margin: 0;
+    line-height: 1;
+}
+.place-menu-popup .leaflet-popup-tip {
+    display: none;
+}
+.place-menu {
+    display: flex;
+    overflow: hidden;
+    border-radius: 4px;
+}
+.place-menu button {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #333;
+    background: #fff;
+    border: none;
+    border-right: 1px solid #e0e0e0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.place-menu button:last-child {
+    border-right: none;
+}
+.place-menu button:hover {
+    background: #f3f3f3;
+}
+
+/* 地点名の登録・編集ダイアログ */
+.place-name-dialog {
+    width: min(360px, calc(100vw - 32px));
+    padding: 0;
+    border: 1px solid #9aa7b0;
+    border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+.place-name-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+.place-name-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 16px 14px;
+}
+.place-name-title {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+}
+.place-name-label {
+    font-size: 12px;
+    color: #666;
+}
+.place-name-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 15px;
+    border: 1px solid #b0bcc4;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.place-name-input:focus {
+    outline: 2px solid #6a7e9b;
+    outline-offset: 1px;
+}
+.place-name-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+.place-name-cancel,
+.place-name-ok {
+    height: 34px;
+    padding: 0 14px;
+    font-size: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.place-name-cancel {
+    color: #444;
+    background: #f0f2f4;
+    border: 1px solid #c5ced4;
+}
+.place-name-ok {
+    color: #fff;
+    background: #5a6f88;
+    border: 1px solid #4a5d73;
+}
+.place-name-cancel:hover {
+    background: #e4e8eb;
+}
+.place-name-ok:hover {
+    background: #4e6178;
+}
+
 /* 予測・予報の表（行＝項目、列＝時刻。左端の項目名を固定して横スクロール） */
 /* 表は画面の横幅いっぱいに使う（幅を決めているのは雲量の地図だけ） */
 .forecast {

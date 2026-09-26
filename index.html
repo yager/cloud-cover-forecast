@@ -163,6 +163,7 @@
         <div id="pin-info" class="pin-info" hidden>
             <button id="pin-clear-btn" class="pin-clear-btn" type="button" aria-label="ピンを消す">×</button>
             <span id="pin-name" class="pin-name"></span>
+            <button id="pin-place-btn" class="pin-place-btn" type="button">登録</button>
             <span id="pin-values" class="pin-values"></span>
         </div>
         <button id="search-toggle-btn" class="search-toggle-btn" type="button" aria-label="地点を変更" title="地点を変更" aria-controls="search-form" aria-expanded="false">🔍</button>
@@ -229,6 +230,19 @@
     
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- 地点の登録・編集（名前入力）。地図上のメニューから開く -->
+    <dialog id="place-name-dialog" class="place-name-dialog">
+        <form id="place-name-form" class="place-name-form">
+            <h2 id="place-name-title" class="place-name-title">地点を登録</h2>
+            <label class="place-name-label" for="place-name-input">名前</label>
+            <input id="place-name-input" class="place-name-input" type="text" name="name" maxlength="80" autocomplete="off">
+            <div class="place-name-actions">
+                <button type="button" id="place-name-cancel" class="place-name-cancel">キャンセル</button>
+                <button type="submit" class="place-name-ok">OK</button>
+            </div>
+        </form>
+    </dialog>
     
     <script type="module" src="app.js"></script>
 </body>
