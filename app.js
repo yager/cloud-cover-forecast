@@ -31,6 +31,17 @@ const STEP_PX = 26;
 // 地図の表示の切り替え（total: 総雲量1枚 / layers: 上中下層の3枚）
 const PC_MEDIA = '(min-width: 1000px)';
 let mapView = null;
+let isFullscreen = false;
+// 全画面スマホで「雲(上中下層)」のとき、どの1層を出すか
+let cloudLayer = 'lower';
+// 各地図に付けた全画面ボタン（状態をまとめて切り替える）
+const fullscreenButtons = [];
+
+// Material Icons 風の四隅枠 / 内側へ縮む矢印
+const FS_ENTER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>';
+const FS_EXIT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path fill="currentColor" d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>';
 
 // 行きたい地点のピンと、雲量データのソース（init で作る）
 let pinController = null;
@@ -206,9 +217,7 @@ function initMaps() {
     }
 
     // マップのサイズを再計算（複数マップの場合に必要）
-    setTimeout(() => {
-        Object.values(maps).forEach((map) => map.invalidateSize());
-    }, 100);
+    setTimeout(invalidateMapsSize, 100);
 
     // すべての地図のズームレベルと位置を連動させる
     let syncing = false; // 同期中フラグ（無限ループを防ぐ）
@@ -1184,6 +1193,98 @@ function updatePinInfo() {
     document.getElementById('pin-values').innerHTML = html;
 }
 
+// 隠れていた地図は大きさを持っていないので測り直す（タブ切替・全画面の出入りで共有）
+function invalidateMapsSize() {
+    Object.values(maps).forEach((map) => {
+        if (map) map.invalidateSize();
+    });
+}
+
+function updateFullscreenButtons() {
+    for (const btn of fullscreenButtons) {
+        const exiting = isFullscreen;
+        btn.innerHTML = exiting ? FS_EXIT_SVG : FS_ENTER_SVG;
+        btn.setAttribute('aria-label', exiting ? '全画面を閉じる' : '地図を全画面表示');
+        btn.title = exiting ? '全画面を閉じる' : '全画面';
+        btn.classList.toggle('is-exit', exiting);
+    }
+}
+
+// 全画面スマホの上中下層フロート。PCと通常表示では出さない
+function updateCloudLayerFloat() {
+    const el = document.getElementById('cloud-layer-float');
+    if (!el) return;
+    const show = isFullscreen && mapView === 'layers' && !window.matchMedia(PC_MEDIA).matches;
+    el.hidden = !show;
+    el.querySelectorAll('.cloud-layer-tab').forEach((tab) => {
+        tab.setAttribute('aria-selected', String(tab.dataset.layer === cloudLayer));
+    });
+}
+
+function setCloudLayer(layer) {
+    cloudLayer = layer;
+    document.getElementById('maps-container').dataset.layer = layer;
+    updateCloudLayerFloat();
+    invalidateMapsSize();
+}
+
+function setFullscreen(on) {
+    isFullscreen = !!on;
+    const panel = document.getElementById('maps-panel');
+    const pointPanel = document.querySelector('.point-panel');
+    panel.classList.toggle('is-fullscreen', isFullscreen);
+    document.body.classList.toggle('is-map-fullscreen', isFullscreen);
+    updateFullscreenButtons();
+    // 通常時は予測表の上（幅いっぱい）。全画面ではパネル内の最下段に移す
+    if (isFullscreen) {
+        panel.appendChild(pointPanel);
+    } else {
+        document.getElementById('forecast-msm').before(pointPanel);
+    }
+    updateCloudLayerFloat();
+    requestAnimationFrame(() => {
+        invalidateMapsSize();
+        if (mapView === 'rain' && nowcastRain) nowcastRain.load().catch(() => {});
+        if (mapView === 'thunder' && nowcastThunder) nowcastThunder.load().catch(() => {});
+    });
+}
+
+function initFullscreen() {
+    // 各地図の右下（Leaflet コントロール）に YouTube 風の全画面ボタンを置く
+    const FullscreenControl = L.Control.extend({
+        options: { position: 'bottomright' },
+        onAdd() {
+            const btn = L.DomUtil.create('button', 'leaflet-control leaflet-control-fullscreen');
+            btn.type = 'button';
+            btn.innerHTML = FS_ENTER_SVG;
+            btn.setAttribute('aria-label', '地図を全画面表示');
+            btn.title = '全画面';
+            L.DomEvent.disableClickPropagation(btn);
+            L.DomEvent.disableScrollPropagation(btn);
+            L.DomEvent.on(btn, 'click', (e) => {
+                L.DomEvent.stop(e);
+                setFullscreen(!isFullscreen);
+            });
+            fullscreenButtons.push(btn);
+            return btn;
+        }
+    });
+    for (const map of Object.values(maps)) {
+        new FullscreenControl().addTo(map);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isFullscreen) setFullscreen(false);
+    });
+    document.querySelectorAll('.cloud-layer-tab').forEach((tab) => {
+        tab.addEventListener('click', () => setCloudLayer(tab.dataset.layer));
+    });
+    window.matchMedia(PC_MEDIA).addEventListener('change', () => {
+        updateCloudLayerFloat();
+        if (isFullscreen) invalidateMapsSize();
+    });
+}
+
 // 雲量の地図の表示を切り替える（total: 総雲量1枚 / layers: 上中下層の3枚）
 function setMapView(view) {
     mapView = view;
@@ -1209,8 +1310,8 @@ function setMapView(view) {
             ctrl.stop();
         }
     }
-    // 隠れていた地図は大きさを持っていないので測り直す
-    Object.values(maps).forEach((map) => map.invalidateSize());
+    updateCloudLayerFloat();
+    invalidateMapsSize();
     updatePinInfo();
 }
 
@@ -1375,6 +1476,7 @@ async function init() {
     initMaps();
     initPin();
     initMapViewTabs();
+    initFullscreen();
 
     // パラメータなしで開いたときは、現在地を自動で取ってピンを立てる。
     // 共有された URL（ピンや地図の位置つき）で開いた場合は、その指定を優先して何もしない

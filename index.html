@@ -76,7 +76,7 @@
     <p id="offline-banner" class="offline-banner" hidden></p>
     
     <main id="content">
-        <div class="maps-panel">
+        <div class="maps-panel" id="maps-panel">
         <div class="layer-tabs" role="tablist">
             <button type="button" class="layer-tab" data-view="total" data-genre="model" role="tab">雲(全)</button>
             <button type="button" class="layer-tab" data-view="layers" data-genre="model" role="tab">雲(上中下層)</button>
@@ -85,17 +85,23 @@
             <button type="button" class="layer-tab" data-view="thunder" data-genre="nowcast" role="tab">雷</button>
         </div>
         
-        <div class="maps-container" id="maps-container">
+        <div class="maps-container" id="maps-container" data-layer="lower">
+            <!-- 全画面スマホの上中下層切替。地図上にフロート（右上ラベルの下・左右中央） -->
+            <div class="cloud-layer-float" id="cloud-layer-float" role="tablist" hidden>
+                <button type="button" class="cloud-layer-tab" data-layer="upper" role="tab">上層</button>
+                <button type="button" class="cloud-layer-tab" data-layer="middle" role="tab">中層</button>
+                <button type="button" class="cloud-layer-tab" data-layer="lower" role="tab" aria-selected="true">下層</button>
+            </div>
             <div class="map-wrapper total-only">
                 <div id="map-total" class="map"></div>
             </div>
-            <div class="map-wrapper layers-only">
+            <div class="map-wrapper layers-only" data-cloud-layer="upper">
                 <div id="map-upper" class="map"></div>
             </div>
-            <div class="map-wrapper layers-only">
+            <div class="map-wrapper layers-only" data-cloud-layer="middle">
                 <div id="map-middle" class="map"></div>
             </div>
-            <div class="map-wrapper layers-only">
+            <div class="map-wrapper layers-only" data-cloud-layer="lower">
                 <div id="map-lower" class="map"></div>
             </div>
             <div class="map-wrapper wind-only">
