@@ -1145,7 +1145,9 @@ function highlightForecastTime(utcTime) {
     if (!container) return;
 
     container.querySelectorAll('td').forEach((td) => {
-        td.classList.toggle('pin-time', !!key && td.dataset.time === key);
+        // 日付行は列のまとめ見出し。先頭コマが0時だと jstKey と一致して赤枠が付いてしまうので除外
+        const isDateRow = td.closest('tr')?.dataset.key === '日付';
+        td.classList.toggle('pin-time', !isDateRow && !!key && td.dataset.time === key);
     });
 
     // 赤線の列が画面の外にあるときだけ、その列が見えるところまで横に動かす
