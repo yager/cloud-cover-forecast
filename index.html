@@ -92,8 +92,9 @@
                 <button type="button" class="cloud-layer-tab" data-layer="middle" role="tab">中層</button>
                 <button type="button" class="cloud-layer-tab" data-layer="lower" role="tab" aria-selected="true">下層</button>
             </div>
-            <div class="map-wrapper total-only">
-                <div id="map-total" class="map"></div>
+            <!-- 全雲量・風・降水・雷は同じ1枚を使い、オーバーレイだけ差し替える -->
+            <div class="map-wrapper shared-only">
+                <div id="map-shared" class="map"></div>
             </div>
             <div class="map-wrapper layers-only" data-cloud-layer="upper">
                 <div id="map-upper" class="map"></div>
@@ -103,15 +104,6 @@
             </div>
             <div class="map-wrapper layers-only" data-cloud-layer="lower">
                 <div id="map-lower" class="map"></div>
-            </div>
-            <div class="map-wrapper wind-only">
-                <div id="map-wind" class="map"></div>
-            </div>
-            <div class="map-wrapper rain-only">
-                <div id="map-rain" class="map"></div>
-            </div>
-            <div class="map-wrapper thunder-only">
-                <div id="map-thunder" class="map"></div>
             </div>
         </div>
         

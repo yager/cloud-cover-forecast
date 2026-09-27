@@ -588,26 +588,12 @@ button, select, option, input {
     image-rendering: pixelated;
 }
 
+/* 単票タブは shared 1枚、上中下層タブは layers 3枚 */
 .maps-container[data-view="total"] .layers-only,
-.maps-container[data-view="total"] .wind-only,
-.maps-container[data-view="total"] .rain-only,
-.maps-container[data-view="total"] .thunder-only,
-.maps-container[data-view="layers"] .total-only,
-.maps-container[data-view="layers"] .wind-only,
-.maps-container[data-view="layers"] .rain-only,
-.maps-container[data-view="layers"] .thunder-only,
-.maps-container[data-view="wind"] .total-only,
 .maps-container[data-view="wind"] .layers-only,
-.maps-container[data-view="wind"] .rain-only,
-.maps-container[data-view="wind"] .thunder-only,
-.maps-container[data-view="rain"] .total-only,
 .maps-container[data-view="rain"] .layers-only,
-.maps-container[data-view="rain"] .wind-only,
-.maps-container[data-view="rain"] .thunder-only,
-.maps-container[data-view="thunder"] .total-only,
 .maps-container[data-view="thunder"] .layers-only,
-.maps-container[data-view="thunder"] .wind-only,
-.maps-container[data-view="thunder"] .rain-only {
+.maps-container[data-view="layers"] .shared-only {
     display: none;
 }
 
@@ -1361,21 +1347,21 @@ button, select, option, input {
         height: calc(var(--map-width) * 2 / 3);
     }
 
-    /* 全雲量と風は1枚だけなので、パネルの横幅いっぱいに広げる */
-    .maps-container[data-view="total"] .map-wrapper,
-    .maps-container[data-view="total"] .map,
-    .maps-container[data-view="wind"] .map-wrapper,
-    .maps-container[data-view="wind"] .map,
-    .maps-container[data-view="rain"] .map-wrapper,
-    .maps-container[data-view="rain"] .map,
-    .maps-container[data-view="thunder"] .map-wrapper,
-    .maps-container[data-view="thunder"] .map {
+    /* 単票タブは1枚だけなので、パネルの横幅いっぱいに広げる */
+    .maps-container[data-view="total"] .shared-only,
+    .maps-container[data-view="total"] .shared-only .map,
+    .maps-container[data-view="wind"] .shared-only,
+    .maps-container[data-view="wind"] .shared-only .map,
+    .maps-container[data-view="rain"] .shared-only,
+    .maps-container[data-view="rain"] .shared-only .map,
+    .maps-container[data-view="thunder"] .shared-only,
+    .maps-container[data-view="thunder"] .shared-only .map {
         width: 100%;
     }
-    .maps-container[data-view="total"] .map,
-    .maps-container[data-view="wind"] .map,
-    .maps-container[data-view="rain"] .map,
-    .maps-container[data-view="thunder"] .map {
+    .maps-container[data-view="total"] .shared-only .map,
+    .maps-container[data-view="wind"] .shared-only .map,
+    .maps-container[data-view="rain"] .shared-only .map,
+    .maps-container[data-view="thunder"] .shared-only .map {
         height: calc(var(--map-width) * 2 / 3);
     }
 
@@ -1473,10 +1459,10 @@ body.is-map-fullscreen {
         flex: 1 1 0;
     }
 
-    .maps-panel.is-fullscreen .maps-container[data-view="total"] .map-wrapper,
-    .maps-panel.is-fullscreen .maps-container[data-view="wind"] .map-wrapper,
-    .maps-panel.is-fullscreen .maps-container[data-view="rain"] .map-wrapper,
-    .maps-panel.is-fullscreen .maps-container[data-view="thunder"] .map-wrapper {
+    .maps-panel.is-fullscreen .maps-container[data-view="total"] .shared-only,
+    .maps-panel.is-fullscreen .maps-container[data-view="wind"] .shared-only,
+    .maps-panel.is-fullscreen .maps-container[data-view="rain"] .shared-only,
+    .maps-panel.is-fullscreen .maps-container[data-view="thunder"] .shared-only {
         width: 100%;
     }
 

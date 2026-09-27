@@ -278,10 +278,8 @@ export class PlacesController {
         const pin = this.pinController.pin;
         const wasActive = pin && samePoint(pin, place);
         if (!wasActive) {
-            const zoom = map.getZoom();
-            for (const m of this.maps) {
-                m.setView([place.lat, place.lng], zoom);
-            }
+            // 動かした地図から syncMaps が他地図へ伝播する
+            map.setView([place.lat, place.lng], map.getZoom());
             this.pinController.set(place.lat, place.lng, place.name);
         }
         this._openMenu(map, place, 'saved');

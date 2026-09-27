@@ -13,16 +13,39 @@ import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, THUNDER_COLORS, THUNDER_LABEL
 // 気圧痛の「絶対水準」の軸で使う、都道府県別の海面平年気圧
 import { MONTHLY_NORMAL_PRESSURE, nearestPrefectureIndex } from './pressure-normals.js';
 
-// マップオブジェクト
+// マップオブジェクト。上中下は同時比較用に3枚、それ以外のタブは shared 1枚でオーバーレイ差替
 const maps = {
-    total: null,
+    shared: null,
     lower: null,
     middle: null,
-    upper: null,
-    wind: null,
-    rain: null,
-    thunder: null
+    upper: null
 };
+
+// shared 地図に載せるオーバーレイと、右上ラベル／左下凡例の DOM
+const sharedMap = {
+    overlays: {
+        total: null,
+        wind: null,
+        rain: null,
+        thunderArea: null,
+        thunderMarkers: null
+    },
+    labelEl: null,
+    legendEl: null
+};
+
+const MAP_LABELS = {
+    rain: '雨雲<small>気象庁ナウキャスト</small>',
+    thunder: '雷<small>気象庁ナウキャスト</small>',
+    wind: '風<small>地上10m付近</small>',
+    total: '全雲量<small>空全体</small>',
+    upper: '上層<small>5500m付近〜</small>',
+    middle: '中層<small>1500〜5500m付近</small>',
+    lower: '下層<small>〜1500m付近</small>'
+};
+
+// shared 地図の凡例 HTML（initMaps で埋める）
+const SHARED_LEGENDS = {};
 
 // 雲量の地図とは別の時間軸で動くナウキャスト（降水・雷）
 let nowcastRain = null;
@@ -109,6 +132,35 @@ function updateUrl(center, zoom) {
     }
 }
 
+// いま操作の基準にする地図（単票タブは shared、上中下層は下層を代表に）
+function focusMap() {
+    return mapView === 'layers' ? maps.lower : maps.shared;
+}
+
+// shared 地図のオーバーレイ・ラベル・凡例をタブに合わせる
+function applySharedMapView(view) {
+    if (!maps.shared) return;
+    const o = sharedMap.overlays;
+    for (const layer of [o.total, o.wind, o.rain, o.thunderArea, o.thunderMarkers]) {
+        if (layer && maps.shared.hasLayer(layer)) maps.shared.removeLayer(layer);
+    }
+    if (view === 'total' && o.total) o.total.addTo(maps.shared);
+    else if (view === 'wind' && o.wind) o.wind.addTo(maps.shared);
+    else if (view === 'rain' && o.rain) o.rain.addTo(maps.shared);
+    else if (view === 'thunder') {
+        if (o.thunderArea) o.thunderArea.addTo(maps.shared);
+        if (o.thunderMarkers) o.thunderMarkers.addTo(maps.shared);
+    }
+    if (sharedMap.labelEl) {
+        sharedMap.labelEl.innerHTML = MAP_LABELS[view] || '';
+    }
+    if (sharedMap.legendEl) {
+        const html = SHARED_LEGENDS[view] || '';
+        sharedMap.legendEl.innerHTML = html;
+        sharedMap.legendEl.hidden = !html;
+    }
+}
+
 // マップを初期化する関数
 function initMaps() {
     // URLパラメータから初期値を取得
@@ -121,10 +173,7 @@ function initMaps() {
         zoomSnap: 0.25
     };
 
-    maps.rain = L.map('map-rain', mapOptions);
-    maps.thunder = L.map('map-thunder', mapOptions);
-    maps.wind = L.map('map-wind', mapOptions);
-    maps.total = L.map('map-total', mapOptions);
+    maps.shared = L.map('map-shared', mapOptions);
     maps.lower = L.map('map-lower', mapOptions);
     maps.middle = L.map('map-middle', mapOptions);
     maps.upper = L.map('map-upper', mapOptions);
@@ -165,42 +214,31 @@ function initMaps() {
         }
     }
 
-    // 各マップにラベルを追加（右上）
-    const MAP_LABELS = {
-        rain: '雨雲<small>気象庁ナウキャスト</small>',
-        thunder: '雷<small>気象庁ナウキャスト</small>',
-        wind: '風<small>地上10m付近</small>',
-        total: '全雲量<small>空全体</small>',
-        upper: '上層<small>5500m付近〜</small>',
-        middle: '中層<small>1500〜5500m付近</small>',
-        lower: '下層<small>〜1500m付近</small>'
-    };
-    for (const [type, html] of Object.entries(MAP_LABELS)) {
+    // 上中下は固定ラベル。shared はタブに応じて中身を差し替える
+    for (const type of ['upper', 'middle', 'lower']) {
         const label = L.control({ position: 'topright' });
         label.onAdd = function() {
             const div = L.DomUtil.create('div', 'leaflet-control-map-label');
-            div.innerHTML = html;
+            div.innerHTML = MAP_LABELS[type];
             return div;
         };
         label.addTo(maps[type]);
     }
+    {
+        const label = L.control({ position: 'topright' });
+        label.onAdd = function() {
+            sharedMap.labelEl = L.DomUtil.create('div', 'leaflet-control-map-label');
+            return sharedMap.labelEl;
+        };
+        label.addTo(maps.shared);
+    }
 
     // 配色の凡例（左下）。連続量（風・降水）は帯、区分（雷）はマス。
     // 色の値は colors.js を参照する（msm.js / nowcast.js の実装と同じ値）
-
-    // 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）
-    function legendBar(colors, labels, unit) {
-        const swatches = colors.map((c) => `<i style="background:${c}"></i>`).join('');
-        const n = colors.length;
-        const ticks = labels.map((label, i) => `<span style="left:${(i + 1) / n * 100}%">${label}</span>`).join('');
-        return `<div class="legend-bar">${swatches}</div><div class="legend-ticks">${ticks}</div><div class="legend-caption">${unit}</div>`;
-    }
-
     // WIND_STEPS は強い順（WindGridLayer の検索順）なので、凡例用に弱い順へ並べ替える。
     // 2 m/s未満は地図上では透明なので先頭に空欄を1つ足す
     const windAscending = [...WIND_STEPS].reverse();
-
-    const LEGENDS = {
+    Object.assign(SHARED_LEGENDS, {
         wind: legendBar(
             ['transparent', ...windAscending.map((s) => `rgba(${s.rgba[0]},${s.rgba[1]},${s.rgba[2]},${(s.rgba[3] / 255).toFixed(2)})`)],
             windAscending.map((s) => s.min), 'm/s'
@@ -209,15 +247,15 @@ function initMaps() {
         thunder: '<div class="legend-levels">' + THUNDER_COLORS.map((hex, i) =>
             `<i style="background:#${hex}" title="${THUNDER_LABELS[i]}">${i + 1}</i>`
         ).join('') + '</div>'
-    };
-    for (const [type, html] of Object.entries(LEGENDS)) {
+    });
+    {
         const legend = L.control({ position: 'bottomleft' });
         legend.onAdd = function() {
-            const div = L.DomUtil.create('div', 'map-legend');
-            div.innerHTML = html;
-            return div;
+            sharedMap.legendEl = L.DomUtil.create('div', 'map-legend');
+            sharedMap.legendEl.hidden = true;
+            return sharedMap.legendEl;
         };
-        legend.addTo(maps[type]);
+        legend.addTo(maps.shared);
     }
 
     // マップのサイズを再計算（複数マップの場合に必要）
@@ -251,6 +289,15 @@ function initMaps() {
         });
     }
 }
+
+// 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）
+function legendBar(colors, labels, unit) {
+    const swatches = colors.map((c) => `<i style="background:${c}"></i>`).join('');
+    const n = colors.length;
+    const ticks = labels.map((label, i) => `<span style="left:${(i + 1) / n * 100}%">${label}</span>`).join('');
+    return `<div class="legend-bar">${swatches}</div><div class="legend-ticks">${ticks}</div><div class="legend-caption">${unit}</div>`;
+}
+
 
 // UTC時刻をJSTに変換して文字列として返す
 function utcToJSTString(utcString) {
@@ -394,16 +441,20 @@ function setupTimeSelect(data) {
 async function createMsmSource(onFrame) {
     const msm = await import('./msm.js');
     const source = new msm.MsmOmSource();
-    const layers = {};
     let requestedTime = null;
     let currentFrame = null;
 
-    Object.keys(maps).forEach((type) => {
-        if (type === 'rain' || type === 'thunder') return; // 降水・雷は別の時間軸なので別管理
-        layers[type] = type === 'wind'
-            ? new msm.WindGridLayer().addTo(maps[type])
-            : new msm.CloudGridLayer().addTo(maps[type]);
-    });
+    // 上中下は各地図に常駐。全雲量・風は shared に載せ替えて使う
+    const layers = {
+        total: new msm.CloudGridLayer(),
+        wind: new msm.WindGridLayer(),
+        upper: new msm.CloudGridLayer().addTo(maps.upper),
+        middle: new msm.CloudGridLayer().addTo(maps.middle),
+        lower: new msm.CloudGridLayer().addTo(maps.lower)
+    };
+    sharedMap.overlays.total = layers.total;
+    sharedMap.overlays.wind = layers.wind;
+    applySharedMapView(mapView);
 
     return {
         loadIndex: () => source.loadIndex(),
@@ -439,7 +490,11 @@ async function createMsmSource(onFrame) {
             if (requestedTime !== time) return;
             currentFrame = frame;
             markDataFetched();
-            Object.keys(layers).forEach((type) => layers[type].setValues(frame[type]));
+            layers.total.setValues(frame.total);
+            layers.upper.setValues(frame.upper);
+            layers.middle.setValues(frame.middle);
+            layers.lower.setValues(frame.lower);
+            layers.wind.setValues(frame.wind);
             onFrame();
 
             // 次のコマを先読み
@@ -982,7 +1037,9 @@ function bindNowcastControls(timeline, pinBar) {
 // 降水ナウキャスト
 async function createNowcastRain() {
     const nc = await import('./nowcast.js');
-    const layer = nc.createRainLayer().addTo(maps.rain);
+    const layer = nc.createRainLayer();
+    sharedMap.overlays.rain = layer;
+    applySharedMapView(mapView);
     const pinBar = createPinBar(document.getElementById('nowcast-pinbar'), nc.sampleAt, nc.intensityColor);
 
     const timeline = await createTimeline({
@@ -997,8 +1054,11 @@ async function createNowcastRain() {
 // 偶数ズームへの丸めは降水と共通だが、上限ズームは違う（nowcast.js 参照）
 async function createNowcastThunder() {
     const nc = await import('./nowcast.js');
-    const areaLayer = nc.createThunderAreaLayer().addTo(maps.thunder);
-    const markers = L.layerGroup().addTo(maps.thunder);
+    const areaLayer = nc.createThunderAreaLayer();
+    const markers = L.layerGroup();
+    sharedMap.overlays.thunderArea = areaLayer;
+    sharedMap.overlays.thunderMarkers = markers;
+    applySharedMapView(mapView);
     // #nowcast-pinbar は降水タブと共有しているDOM。役割は同じ（ピン地点の帯）なので
     // そのまま流用する。色は気象庁の活動度1〜4の定義色（nc.thunderActivityColor）。
     // thns が無いコマ（liden だけの5分刻み）は直前の値を引き継ぐ
@@ -1341,6 +1401,7 @@ function setMapView(view) {
         }
     }
     updateCloudLayerFloat();
+    applySharedMapView(view);
     invalidateMapsSize();
     updatePinInfo();
 }
@@ -1390,7 +1451,7 @@ function locateAndSetPin({ auto = false } = {}) {
             const { latitude, longitude } = position.coords;
             // まず座標のまま置き、住所が分かったら表示名だけ差し替える
             pinController.set(latitude, longitude, `現在地（${formatLatLng(latitude, longitude)}）`);
-            maps.lower.setView([latitude, longitude], maps.lower.getZoom());
+            focusMap().setView([latitude, longitude], focusMap().getZoom());
             nameCurrentLocation(latitude, longitude);
         },
         (error) => {
@@ -1416,7 +1477,7 @@ async function nameCurrentLocation(lat, lng) {
 
     pinController.rename(`現在地（${address}）`);
     updatePinInfo();
-    updateUrl(maps.lower.getCenter(), maps.lower.getZoom());
+    updateUrl(focusMap().getCenter(), focusMap().getZoom());
 }
 
 // データを最後に取得できた時刻。オフラインになったときに「いつの値か」を出すために持つ。
@@ -1450,7 +1511,7 @@ function initPin() {
         updatePinInfo();
         refreshTimeLabels();
         updateForecast(pin);
-        updateUrl(maps.lower.getCenter(), maps.lower.getZoom());
+        updateUrl(focusMap().getCenter(), focusMap().getZoom());
         if (placesController) placesController.onPinChange();
     }, {
         onMarkerClick: (pin, map) => {
@@ -1498,10 +1559,10 @@ function initPin() {
             list: document.getElementById('search-results'),
             status: document.getElementById('search-status')
         },
-        () => maps.lower.getCenter(),
+        () => focusMap().getCenter(),
         (lat, lng, name) => {
             pinController.set(lat, lng, name);
-            maps.lower.setView([lat, lng], maps.lower.getZoom());
+            focusMap().setView([lat, lng], focusMap().getZoom());
         }
     );
 }
