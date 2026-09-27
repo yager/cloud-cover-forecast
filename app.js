@@ -1455,7 +1455,8 @@ function initPin() {
     }, {
         onMarkerClick: (pin, map) => {
             if (placesController) placesController.onPinMarkerClick(pin, map);
-        }
+        },
+        shouldHidePin: (pin) => !!(placesController && placesController.findAt(pin.lat, pin.lng))
     });
 
     placesController = new PlacesController({

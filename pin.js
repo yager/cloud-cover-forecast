@@ -183,7 +183,8 @@ export async function searchPlaces(query, center, signal) {
 
 // --- ピン ---
 
-const PIN_ICON = L.divIcon({
+// 保存地点のアクティブ表示（places.js）でも同じアイコンを使う
+export const PIN_ICON = L.divIcon({
     className: 'pin-marker',
     html: '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">'
         + '<path d="M13 1C6.4 1 1 6.3 1 12.9 1 21.8 13 37 13 37s12-15.2 12-24.1C25 6.3 19.6 1 13 1z" '
@@ -234,10 +235,12 @@ function onLongPress(map, handler) {
 export class PinController {
     // maps: { key: L.Map }、onChange(pin | null): ピンが置かれた・動いた・消えたとき
     // options.onMarkerClick(pin, map): ピン本体をタップしたとき（地点メニュー用）
+    // options.shouldHidePin(pin): 保存地点マーカーが赤ピン役を担うとき true（二重表示を避ける）
     constructor(maps, onChange, options = {}) {
         this.maps = Object.values(maps);
         this.onChange = onChange;
         this.onMarkerClick = options.onMarkerClick || null;
+        this.shouldHidePin = options.shouldHidePin || (() => false);
         this.pin = null; // { lat, lng, name }
         this.markers = [];
         // ドラッグ直後に地図へ残る click を1回だけ無視する
@@ -279,6 +282,17 @@ export class PinController {
         return !!(hit && hit.closest && hit.closest('.pin-marker'));
     }
 
+    // 保存地点側がアイコンを切り替えたあと、ピンマーカーの有無だけ揃える（onChange は呼ばない）
+    syncMarkers() {
+        this._render();
+    }
+
+    // ドラッグ開始時に地図 click を抑止（保存地点のアクティブマーカーからも呼ぶ）
+    suppressMapClick() {
+        this._suppressMapClick = true;
+        setTimeout(() => { this._suppressMapClick = false; }, 0);
+    }
+
     // name が無いとき（クリック・ドラッグ・緯度経度入力）は座標を表示名にする
     set(lat, lng, name = null) {
         this.pin = { lat, lng, name: name || formatLatLng(lat, lng) };
@@ -299,7 +313,8 @@ export class PinController {
     }
 
     _render() {
-        if (!this.pin) {
+        // 未選択、または保存地点マーカーが赤ピン役のときは PinController 側のマーカーを出さない
+        if (!this.pin || this.shouldHidePin(this.pin)) {
             this.markers.forEach((m) => m.remove());
             this.markers = [];
             return;

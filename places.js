@@ -1,5 +1,6 @@
 // 保存した地点（localStorage）。一覧UIは持たず、地図上の水色の丸とメニューだけで完結する。
-import { formatLatLng } from './pin.js';
+// 選択中の保存地点は同じマーカーを setIcon で赤ピンにし、未保存ピンだけ PinController が持つ。
+import { formatLatLng, PIN_ICON } from './pin.js';
 
 const STORAGE_KEY = 'ccf-places';
 
@@ -55,10 +56,14 @@ export class PlacesController {
         this.reverseGeocode = reverseGeocode;
         this.places = loadPlaces();
         this.groups = this.maps.map((map) => L.layerGroup().addTo(map));
+        // place.id → 各地図の L.Marker（破棄せず setIcon でアクティブ切替）
+        this.markersById = new Map();
         this._popup = null;
         this._editingId = null;
         this._draft = null;
         this._dialogSeq = 0;
+        this._draggingPlaceId = null;
+        this._ignorePlaceClick = false;
 
         this.dialog = document.getElementById('place-name-dialog');
         this.titleEl = document.getElementById('place-name-title');
@@ -183,6 +188,8 @@ export class PlacesController {
             autoClose: true,
             // 地図 click でメニューを開く経路があるので、同一 click で閉じない
             closeOnClick: false,
+            // 中央寄せ直後にポップアップが勝手に地図をずらさない
+            autoPan: false,
             offset: [0, -10],
             maxWidth: 280
         })
@@ -268,33 +275,97 @@ export class PlacesController {
     }
 
     _onPlaceClick(place, map) {
-        this.pinController.set(place.lat, place.lng, place.name);
-        map.setView([place.lat, place.lng], map.getZoom());
-        // set / setView に伴う地図 click より後に出す
-        requestAnimationFrame(() => this._openMenu(map, place, 'saved'));
+        const pin = this.pinController.pin;
+        const wasActive = pin && samePoint(pin, place);
+        if (!wasActive) {
+            const zoom = map.getZoom();
+            for (const m of this.maps) {
+                m.setView([place.lat, place.lng], zoom);
+            }
+            this.pinController.set(place.lat, place.lng, place.name);
+        }
+        this._openMenu(map, place, 'saved');
+    }
+
+    _applyMarkerState(marker, active) {
+        marker.setIcon(active ? PIN_ICON : PLACE_ICON);
+        marker.setZIndexOffset(active ? 1000 : -200);
+        if (marker.dragging) {
+            if (active) marker.dragging.enable();
+            else marker.dragging.disable();
+        }
+    }
+
+    _createMarkersForPlace(place) {
+        const pin = this.pinController.pin;
+        const active = !!(pin && samePoint(place, pin));
+        const markers = this.maps.map((map, i) => {
+            const marker = L.marker([place.lat, place.lng], {
+                icon: active ? PIN_ICON : PLACE_ICON,
+                draggable: true,
+                autoPan: true,
+                zIndexOffset: active ? 1000 : -200,
+                keyboard: false,
+                bubblingMouseEvents: false
+            });
+            this.groups[i].addLayer(marker);
+            if (marker.dragging && !active) marker.dragging.disable();
+
+            marker.on('click', (e) => {
+                L.DomEvent.stop(e);
+                if (this._ignorePlaceClick || this._draggingPlaceId === place.id) return;
+                this._onPlaceClick(place, map);
+            });
+            marker.on('dragstart', () => {
+                this._draggingPlaceId = place.id;
+                this.pinController.suppressMapClick();
+            });
+            marker.on('drag', (e) => {
+                const latlng = e.target.getLatLng();
+                const siblings = this.markersById.get(place.id) || [];
+                siblings.forEach((m) => {
+                    if (m !== marker) m.setLatLng(latlng);
+                });
+            });
+            marker.on('dragend', (e) => {
+                const latlng = e.target.getLatLng();
+                this.pinController.suppressMapClick();
+                this._draggingPlaceId = null;
+                this._ignorePlaceClick = true;
+                // 保存座標は動かさない。ドロップ先を未保存ピンにする（シアンは元の位置に戻る）
+                this.pinController.set(latlng.lat, latlng.lng);
+                setTimeout(() => { this._ignorePlaceClick = false; }, 0);
+            });
+            return marker;
+        });
+        this.markersById.set(place.id, markers);
     }
 
     _render() {
         const pin = this.pinController.pin;
-        for (const group of this.groups) group.clearLayers();
+        const liveIds = new Set(this.places.map((p) => p.id));
+
+        for (const [id, markers] of this.markersById) {
+            if (liveIds.has(id)) continue;
+            markers.forEach((m) => m.remove());
+            this.markersById.delete(id);
+        }
 
         for (const place of this.places) {
-            // 赤ピンと同じ地点の保存丸は隠す（重なり対策）
-            if (pin && samePoint(place, pin)) continue;
-
-            this.maps.forEach((map, i) => {
-                const marker = L.marker([place.lat, place.lng], {
-                    icon: PLACE_ICON,
-                    zIndexOffset: -200,
-                    keyboard: false,
-                    bubblingMouseEvents: false
-                });
-                marker.on('click', (e) => {
-                    L.DomEvent.stop(e);
-                    this._onPlaceClick(place, map);
-                });
-                this.groups[i].addLayer(marker);
-            });
+            const active = !!(pin && samePoint(place, pin));
+            let markers = this.markersById.get(place.id);
+            if (!markers) {
+                this._createMarkersForPlace(place);
+                continue;
+            }
+            // ドラッグ中は latlng を保存座標へ戻さない（追従表示を潰さない）
+            if (this._draggingPlaceId !== place.id) {
+                markers.forEach((m) => m.setLatLng([place.lat, place.lng]));
+            }
+            markers.forEach((m) => this._applyMarkerState(m, active));
         }
+
+        // 保存地点が赤ピン役を担う／外すので、PinController 側のマーカー有無を揃える
+        this.pinController.syncMarkers();
     }
 }
