@@ -10,6 +10,8 @@ import {
 // 副作用の無い色の定数だけ。凡例は起動時に組み立てるので、描画モジュールを待たずに
 // msm.js / nowcast.js と同じ色を参照できるようにしてある
 import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, THUNDER_COLORS, THUNDER_LABELS } from './colors.js';
+// 気圧痛の「絶対水準」の軸で使う、都道府県別の海面平年気圧
+import { MONTHLY_NORMAL_PRESSURE, nearestPrefectureIndex } from './pressure-normals.js';
 
 // マップオブジェクト
 const maps = {
@@ -501,34 +503,57 @@ function rainCell(value) {
     return { html, cls: `rain-${step}` };
 }
 
-// 気圧痛の目安。「6時間の急な変化」と「24時間でのじわじわした変化」の
-// 強いほうを採る（前日比5hPa以上の低下で頭痛が増える、という報告に合わせている）。
-// 体感に合わせて調整するときはここだけ変える。
+// 気圧痛の目安。3つの軸のうち一番強いものを採る:
+//   A) 6時間での急な下降  B) 24時間でのじわじわした下降
+//   C) その都道府県・月の平年値との差（絶対的な低さ）
+// 下降側だけ段階的な警戒色にする。上昇は「変動があった」ことだけ分かればよいので単色（非警戒色）。
+// 内耳は変動そのものを感知するとされ上昇でも症状は出るが、根拠の強さが下降より明確に弱いため
+// （6時間前の下降が最も強い予測因子。当日朝の気圧が高いことも有意だが重要度は半分以下）。
+//
+// 根拠: Kimoto 2011（前日比5hPa下降で頭痛増加）、Okuma 2015（標準気圧比6〜10hPa低下で発症集中）、
+// Katsuki 2023（6時間前の下降が最強の予測因子、絶対的な低さも独立して有意、6日間の持続下降も同程度）。
+// 詳細は scratch/design-pressure-color.md 参照。体感に合わせて調整するときはここだけ変える。
 const PRESSURE_RULES = [
     { hours: 6, levels: [2, 4, 6] },
     { hours: 24, levels: [5, 8, 12] }
 ];
+const NORMAL_LEVELS = [3, 6, 10]; // 平年値からの低さ（hPa）。Okumaの6〜10hPaを平年値基準に読み替え
 
-// stepHours: その表の1コマが何時間か（1時間予測=1、2週間予測=6）
-function pressureCells(values, stepHours) {
+function tierOf(size, levels) {
+    return size >= levels[2] ? 3 : size >= levels[1] ? 2 : size >= levels[0] ? 1 : 0;
+}
+
+// stepHours: その表の1コマが何時間か（1時間予測=1、2週間予測=6）。
+// times: 各コマのJST時刻文字列（軸Cで月を読むのに使う）。pin: 軸Cの都道府県判定に使う
+function pressureCells(values, stepHours, times, pin) {
+    const prefIndex = pin ? nearestPrefectureIndex(pin.lat, pin.lng) : null;
     return values.map((value, i) => {
         const html = num(value);
         if (value === null || value === undefined) return html;
 
-        let worst = { step: 0, change: 0 };
+        // A・B: 6時間・24時間の変化。下降と上昇を別に扱う（上昇は最初の段階だけ、単色）
+        let fallTier = 0;
+        let hasRise = false;
         for (const rule of PRESSURE_RULES) {
             const back = rule.hours / stepHours;
             const previous = values[i - back];
             if (!Number.isInteger(back) || previous === null || previous === undefined) continue;
             const change = value - previous;
-            const size = Math.abs(change);
-            const step = size >= rule.levels[2] ? 3 : size >= rule.levels[1] ? 2 : size >= rule.levels[0] ? 1 : 0;
-            if (step > worst.step || (step === worst.step && size > Math.abs(worst.change))) {
-                worst = { step, change };
-            }
+            if (change < 0) fallTier = Math.max(fallTier, tierOf(-change, rule.levels));
+            else if (change >= rule.levels[0]) hasRise = true;
         }
-        if (worst.step === 0) return html;
-        return { html, cls: `press-${worst.change < 0 ? 'fall' : 'rise'}-${worst.step}` };
+
+        // C: その都道府県・月の平年値との差。低いほうだけ見る
+        if (prefIndex !== null && times && times[i]) {
+            const month = Number(times[i].slice(5, 7)) - 1;
+            const normal = MONTHLY_NORMAL_PRESSURE[prefIndex][month];
+            const below = normal - value;
+            if (below > 0) fallTier = Math.max(fallTier, tierOf(below, NORMAL_LEVELS));
+        }
+
+        if (fallTier > 0) return { html, cls: `press-fall-${fallTier}` };
+        if (hasRise) return { html, cls: 'press-rise' };
+        return html;
     });
 }
 
@@ -561,7 +586,7 @@ function cloudCell(value) {
 }
 
 // 数値計算の結果（MSM・AIFS）の表。stepHours は1コマの長さ（気圧の変化量の計算に使う）
-function forecastRows(series, stepHours) {
+function forecastRows(series, stepHours, pin) {
     const v = series.values;
 
     // 同じ日付の列をひとつのセルにまとめる。
@@ -592,7 +617,7 @@ function forecastRows(series, stepHours) {
             return { html, cls: `wind-${step}` };
         }) },
         { key: '湿度', cells: v.relative_humidity_2m.map(humidityCell) },
-        { key: '気圧', cells: pressureCells(v.pressure_msl, stepHours) }
+        { key: '気圧', cells: pressureCells(v.pressure_msl, stepHours, series.times, pin) }
     ];
 }
 
@@ -648,7 +673,7 @@ async function updateForecast(pin) {
             section.hidden = false;
             const container = section.querySelector('.table-container');
             container.innerHTML = '<table></table>';
-            renderTable(container.firstChild, forecastRows(series, stepHours), series.times);
+            renderTable(container.firstChild, forecastRows(series, stepHours, pin), series.times);
             markPastCells();
             scrollToCurrentColumn(container);
         }

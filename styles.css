@@ -1143,13 +1143,13 @@ button, select, option, input {
 .table-container td.rain-7 { background: #ff2800; color: white; }
 .table-container td.rain-8 { background: #b40068; color: white; }
 
-/* 気圧の変化（気圧痛の目安）。低下＝ピンク、上昇＝青。濃さは上下で対称 */
+/* 気圧の変化（気圧痛の目安）。低下＝ピンクの3段階（急な下降・持続的な下降・平年値比の低さの
+   一番強いもの）。上昇は根拠が下降ほど強くないので、警戒色にせず単色の青だけで示す
+   （変動があったこと自体は分かるが、段階では煽らない） */
 .table-container td.press-fall-1 { background: #fbe8f0; }
 .table-container td.press-fall-2 { background: #f3b6d1; }
 .table-container td.press-fall-3 { background: #e58ab5; }
-.table-container td.press-rise-1 { background: #e3edf6; }
-.table-container td.press-rise-2 { background: #b9d3ec; }
-.table-container td.press-rise-3 { background: #8fb8e0; }
+.table-container td.press-rise { background: #e3edf6; }
 
 /* 気温は背景を使わず文字色で。-5℃未満と猛暑日だけ太字にする */
 .table-container td.temp-cold3 { color: #0d47a1; font-weight: 700; }

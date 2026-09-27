@@ -35,7 +35,8 @@ self.addEventListener('install', (event) => {
             './pin.js',
             './places.js',
             './weather.js',
-            './colors.js'
+            './colors.js',
+            './pressure-normals.js'
         ]);
         await self.skipWaiting();
     })());
