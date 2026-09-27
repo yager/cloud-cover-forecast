@@ -1368,8 +1368,14 @@ function setFullscreen(on) {
     updateCloudLayerFloat();
     requestAnimationFrame(() => {
         invalidateMapsSize();
-        if (mapView === 'rain' && nowcastRain) nowcastRain.load().catch(() => {});
-        if (mapView === 'thunder' && nowcastThunder) nowcastThunder.load().catch(() => {});
+        if (mapView === 'rain' && nowcastRain) {
+            nowcastRain.setPin(pinController && pinController.pin);
+            nowcastRain.load().catch(() => {});
+        }
+        if (mapView === 'thunder' && nowcastThunder) {
+            nowcastThunder.setPin(pinController && pinController.pin);
+            nowcastThunder.load().catch(() => {});
+        }
     });
 }
 
@@ -1436,6 +1442,9 @@ function setMapView(view) {
         const ctrl = nowcasts[key];
         if (!ctrl) continue;
         if (view === key) {
+            // 起動時に GPS が後から付くと、生成直後の setPin(null) のまま残ることがある。
+            // タブを開くたびにいまのピンを渡し直す
+            ctrl.setPin(pinController && pinController.pin);
             ctrl.load().catch((e) => console.error(`${nowcastLabels[key]}ナウキャストを取得できませんでした`, e));
         } else {
             ctrl.stop();
@@ -1658,13 +1667,13 @@ async function init() {
     // 時間の経過で「過ぎた時刻」が増えるので、定期的に付け直す
     setInterval(markPastCells, 60 * 1000);
 
-    // URL で指定されたピンは、ここに来る前に置かれていることがある
-    const pin = pinController && pinController.pin;
+    // URL / GPS のピンは factory 待ちのあいだに付くことがある。
+    // ループ開始時のスナップショットを渡すと、後から付いたピンを null で上書きしてしまう
     for (const [key, factory] of [['rain', createNowcastRain], ['thunder', createNowcastThunder]]) {
         const ctrl = await factory();
         if (key === 'rain') nowcastRain = ctrl;
         else nowcastThunder = ctrl;
-        ctrl.setPin(pin);
+        ctrl.setPin(pinController && pinController.pin);
         if (mapView === key) ctrl.load().catch(() => {});
     }
 
