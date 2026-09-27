@@ -92,6 +92,11 @@
                 <button type="button" class="cloud-layer-tab" data-layer="middle" role="tab">中層</button>
                 <button type="button" class="cloud-layer-tab" data-layer="lower" role="tab" aria-selected="true">下層</button>
             </div>
+            <!-- 現在地の自動取得／URL の pin 復元直後だけ。地図上フロート。Esc か ✗ で閉じる（自動では消さない） -->
+            <div id="longpress-toast" class="longpress-toast" role="status" hidden>
+                <p class="longpress-toast-text">地図を長押し（約0.5秒）すると、触った場所の予測に切り替えられます</p>
+                <button type="button" class="longpress-toast-close" id="longpress-toast-close" aria-label="閉じる">×</button>
+            </div>
             <!-- 全雲量・風・降水・雷は同じ1枚を使い、オーバーレイだけ差し替える -->
             <div class="map-wrapper shared-only">
                 <div id="map-shared" class="map"></div>
@@ -159,7 +164,7 @@
             <span id="pin-values" class="pin-values"></span>
         </div>
         <button id="search-toggle-btn" class="search-toggle-btn" type="button" aria-label="地点を変更" title="地点を変更" aria-controls="search-form" aria-expanded="false">🔍</button>
-        <p id="forecast-hint" class="forecast-hint">地点にピンを立てると、その地点の予測を表示します（PCはクリック、スマホは長押し、または上の検索・現在地）。</p>
+        <p id="forecast-hint" class="forecast-hint"><strong>地図を長押し</strong>（約0.5秒）すると、その地点の予測を表示します。検索や現在地でも選べます。</p>
     </div>
     
     <section id="forecast-msm" class="forecast forecast-model" hidden>

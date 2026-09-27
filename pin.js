@@ -1,5 +1,6 @@
-// 行きたい地点を示す赤いピン（1点のみ）と、場所検索（地名・住所・緯度経度）。
-// ピンは3つの地図すべてに同じ位置で立て、どれかで動かすと他も追従する。
+// 行きたい地点を示す選択マーカー（1点のみ）と、場所検索（地名・住所・緯度経度）。
+// 未保存の選択は赤バルーン。表示中の地図すべてに同じ位置で立て、どれかで動かすと他も追従する。
+// 地図 click では置かない（マーカー click＝メニュー、長押し＝置く、ドラッグ＝移す）。
 
 // 国土地理院の住所検索 API（CORS 許可あり。ブラウザから直接呼ぶ）
 const GSI_SEARCH_URL = 'https://msearch.gsi.go.jp/address-search/AddressSearch';
@@ -9,7 +10,7 @@ const MAX_RESULTS = 30;
 // 緯度経度の小数桁数（第5位 ≒ 約1m）
 const DECIMAL_PLACES = 5;
 
-// スマホの長押し判定
+// 長押しでピンを置く（PC・スマホ共通）
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_TOLERANCE_PX = 10;
 
@@ -181,61 +182,102 @@ export async function searchPlaces(query, center, signal) {
     return results.slice(0, MAX_RESULTS);
 }
 
-// --- ピン ---
+// --- 選択中マーカー（しずく型＝バルーン） ---
+// 赤＝未保存の選択、シアン＝保存済みの選択。非選択の保存地点は places.js の丸。
 
-// 保存地点のアクティブ表示（places.js）でも同じアイコンを使う
-export const PIN_ICON = L.divIcon({
-    className: 'pin-marker',
-    html: '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="38" viewBox="0 0 26 38">'
-        + '<path d="M13 1C6.4 1 1 6.3 1 12.9 1 21.8 13 37 13 37s12-15.2 12-24.1C25 6.3 19.6 1 13 1z" '
-        + 'fill="#e53935" stroke="#fff" stroke-width="2"/>'
-        + '<circle cx="13" cy="13" r="4.5" fill="#fff"/></svg>',
-    iconSize: [26, 38],
-    iconAnchor: [13, 37]
-});
+const BALLOON_PATH = 'M13 1C6.4 1 1 6.3 1 12.9 1 21.8 13 37 13 37s12-15.2 12-24.1C25 6.3 19.6 1 13 1z';
 
-// スマホ（タッチ）の長押しを検出する。指が動いたり2本指になったら取り消す
+function balloonSvg(fill, width, height) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 26 38" aria-hidden="true">`
+        + `<path d="${BALLOON_PATH}" fill="${fill}" stroke="#fff" stroke-width="2"/>`
+        + '<circle cx="13" cy="13" r="4.5" fill="#fff"/></svg>';
+}
+
+function balloonDivIcon(fill) {
+    return L.divIcon({
+        className: 'balloon-marker',
+        html: balloonSvg(fill, 26, 38),
+        iconSize: [26, 38],
+        iconAnchor: [13, 37]
+    });
+}
+
+export const RED_BALLOON_ICON = balloonDivIcon('#e53935');
+export const CYAN_BALLOON_ICON = balloonDivIcon('#00acc1');
+
+// 地点ラベル左用。地図のバルーンと同じ色規則
+export function renderPinNameLabel(el, name, { saved }) {
+    if (!el) return;
+    const fill = saved ? '#00acc1' : '#e53935';
+    el.replaceChildren();
+    const glyph = document.createElement('span');
+    glyph.className = 'pin-name-balloon';
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.innerHTML = balloonSvg(fill, 14, 20);
+    const text = document.createElement('span');
+    text.className = 'pin-name-text';
+    text.textContent = name;
+    el.append(glyph, text);
+    el.title = name;
+    el.classList.toggle('is-saved', !!saved);
+}
+
+// 長押しでピンを置く。指／マウスが動いたり、非 primary・右クリックなら取り消す。
+// コントロールや既存マーカー上では開始しない（メニューや地図操作と取り違えないため）
 function onLongPress(map, handler) {
     const el = map.getContainer();
     let timer = null;
     let start = null;
     let lastPointerType = 'mouse';
+    let armed = false; // 長押しが発火したら、続く contextmenu / click を抑止する
 
     const cancel = () => {
         clearTimeout(timer);
         timer = null;
     };
 
+    const onControlOrMarker = (target) => !!(target && target.closest
+        && target.closest('.leaflet-control, .leaflet-marker-icon, .place-menu, button, a, input, select, textarea'));
+
     el.addEventListener('pointerdown', (e) => {
         lastPointerType = e.pointerType;
-        if (e.pointerType !== 'touch') return;
+        armed = false;
         if (!e.isPrimary) {
             cancel();
             return;
         }
+        // マウスは左ボタンだけ。タッチ／ペンは button が 0 以外になりうるので type で見る
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (onControlOrMarker(e.target)) return;
         start = { x: e.clientX, y: e.clientY };
         cancel();
         timer = setTimeout(() => {
             timer = null;
+            armed = true;
             handler(map.mouseEventToLatLng(e));
         }, LONG_PRESS_MS);
     });
     el.addEventListener('pointermove', (e) => {
-        if (!timer || !e.isPrimary) return;
+        if (!timer || !e.isPrimary || !start) return;
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > LONG_PRESS_TOLERANCE_PX) cancel();
     });
     el.addEventListener('pointerup', cancel);
     el.addEventListener('pointercancel', cancel);
-    // Android の長押しメニューを出さない
+    // 長押し直後の OS メニューや、置き終わりの click がマーカーメニューを誤発火しないようにする
     el.addEventListener('contextmenu', (e) => {
-        if (lastPointerType === 'touch') e.preventDefault();
+        if (lastPointerType === 'touch' || armed) e.preventDefault();
     });
+    el.addEventListener('click', (e) => {
+        if (!armed) return;
+        e.stopPropagation();
+        armed = false;
+    }, true);
 }
 
 export class PinController {
     // maps: { key: L.Map }、onChange(pin | null): ピンが置かれた・動いた・消えたとき
     // options.onMarkerClick(pin, map): ピン本体をタップしたとき（地点メニュー用）
-    // options.shouldHidePin(pin): 保存地点マーカーが赤ピン役を担うとき true（二重表示を避ける）
+    // options.shouldHidePin(pin): 保存地点マーカーが選択中バルーン役のとき true（二重表示を避ける）
     constructor(maps, onChange, options = {}) {
         this.maps = Object.values(maps);
         this.onChange = onChange;
@@ -243,43 +285,10 @@ export class PinController {
         this.shouldHidePin = options.shouldHidePin || (() => false);
         this.pin = null; // { lat, lng, name }
         this.markers = [];
-        // ドラッグ直後に地図へ残る click を1回だけ無視する
-        this._suppressMapClick = false;
 
         for (const map of this.maps) {
-            let lastPointerType = 'mouse';
-            map.getContainer().addEventListener('pointerdown', (e) => {
-                lastPointerType = e.pointerType;
-            }, true);
-
-            // PC はクリック、スマホは長押しで置く。
-            // 注意: 地図 click でピンを置く設計と、ドラッグ可能マーカーの click は衝突しやすい。
-            // マーカーは bubblingMouseEvents:false にし、それでもタイルへ抜けた click は
-            // 座標ヒットで「置く」を抑止してメニューへ回す（Leaflet の定石＋抜け穴対策）。
-            map.on('click', (e) => {
-                if (this._suppressMapClick) {
-                    this._suppressMapClick = false;
-                    return;
-                }
-                if (this._isPinClick(e)) {
-                    if (this.pin && this.onMarkerClick) this.onMarkerClick(this.pin, map);
-                    return;
-                }
-                if (lastPointerType === 'touch') return;
-                this.set(e.latlng.lat, e.latlng.lng);
-            });
-            onLongPress(map, (latlng) => this.set(latlng.lat, latlng.lng));
+            onLongPress(map, (latlng) => this.set(latlng.lat, latlng.lng, null, 'longpress'));
         }
-    }
-
-    // マーカー上の click（通常）または、ドラッグ可能マーカーでタイルへ抜けた click
-    _isPinClick(e) {
-        const oe = e && e.originalEvent;
-        if (!oe) return false;
-        if (oe.target && oe.target.closest && oe.target.closest('.pin-marker')) return true;
-        if (!this.pin || !Number.isFinite(oe.clientX) || !Number.isFinite(oe.clientY)) return false;
-        const hit = document.elementFromPoint(oe.clientX, oe.clientY);
-        return !!(hit && hit.closest && hit.closest('.pin-marker'));
     }
 
     // 保存地点側がアイコンを切り替えたあと、ピンマーカーの有無だけ揃える（onChange は呼ばない）
@@ -287,14 +296,10 @@ export class PinController {
         this._render();
     }
 
-    // ドラッグ開始時に地図 click を抑止（保存地点のアクティブマーカーからも呼ぶ）
-    suppressMapClick() {
-        this._suppressMapClick = true;
-        setTimeout(() => { this._suppressMapClick = false; }, 0);
-    }
-
-    // name が無いとき（クリック・ドラッグ・緯度経度入力）は座標を表示名にする
-    set(lat, lng, name = null) {
+    // name が無いとき（長押し・ドラッグ・緯度経度入力）は座標を表示名にする
+    // source: どこから選ばれたか（長押し案内トースト用。'geolocation-auto' のときだけ出す）
+    set(lat, lng, name = null, source = 'other') {
+        this.lastSetSource = source;
         this.pin = { lat, lng, name: name || formatLatLng(lat, lng) };
         this._render();
         this.onChange(this.pin);
@@ -313,7 +318,7 @@ export class PinController {
     }
 
     _render() {
-        // 未選択、または保存地点マーカーが赤ピン役のときは PinController 側のマーカーを出さない
+        // 未選択、または保存地点が選択中バルーン役のときは PinController 側の赤バルーンを出さない
         if (!this.pin || this.shouldHidePin(this.pin)) {
             this.markers.forEach((m) => m.remove());
             this.markers = [];
@@ -322,18 +327,14 @@ export class PinController {
         if (this.markers.length === 0) {
             this.markers = this.maps.map((map) => {
                 const marker = L.marker([this.pin.lat, this.pin.lng], {
-                    icon: PIN_ICON,
+                    icon: RED_BALLOON_ICON,
                     draggable: true,
                     autoPan: true,
                     keyboard: false,
                     zIndexOffset: 1000,
-                    // マーカー click を地図へ伝播させない（Leaflet の推奨）
                     bubblingMouseEvents: false
                 }).addTo(map);
 
-                marker.on('dragstart', () => {
-                    this._suppressMapClick = true;
-                });
                 // ドラッグ中は他の地図のピンも追従させる
                 marker.on('drag', (e) => {
                     const latlng = e.target.getLatLng();
@@ -343,9 +344,7 @@ export class PinController {
                 });
                 marker.on('dragend', (e) => {
                     const latlng = e.target.getLatLng();
-                    this._suppressMapClick = true;
                     this.set(latlng.lat, latlng.lng);
-                    setTimeout(() => { this._suppressMapClick = false; }, 0);
                 });
                 marker.on('click', (e) => {
                     L.DomEvent.stop(e);

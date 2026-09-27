@@ -1,7 +1,7 @@
 // 雲量予測の画面まわり。地図の初期化・表・ナウキャストのタイムラインなど。
 // データ取得そのものは msm.js / nowcast.js / weather.js / pin.js に分かれている。
 
-import { PinController, setupSearch, formatLatLng } from './pin.js';
+import { PinController, setupSearch, formatLatLng, renderPinNameLabel } from './pin.js';
 import { PlacesController } from './places.js';
 import {
     loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
@@ -703,12 +703,47 @@ function showForecastError(sectionId, message) {
     section.querySelector('.table-container').innerHTML = `<p class="forecast-error">${message}</p>`;
 }
 
+// 未選択時だけ地点パネルに長押し案内を出す（選択中は縦を食うので出さない）
+function updatePlaceHint(hasPin) {
+    const el = document.getElementById('forecast-hint');
+    if (!el) return;
+    el.hidden = !!hasPin;
+    if (hasPin) return;
+    el.replaceChildren();
+    const strong = document.createElement('strong');
+    strong.textContent = '地図を長押し';
+    el.append(strong, '（約0.5秒）すると、その地点の予測を表示します。検索や現在地でも選べます。');
+}
+
+// 未選択時の長押しヒントを見ずに地点が入ったとき、地図上トーストで教える（セッション1回）
+// - geolocation-auto: パラメータ無し起動からの自動現在地
+// - url: 共有/前回の ?pin=… で復元（自動現在地のあと URL に pin が残るので、リロードはこちら）
+// 検索・手動現在地・長押し・ドラッグ・保存地点では出さない
+const LONGPRESS_TOAST_KEY = 'ccf-longpress-toast';
+
+function hideLongPressToast() {
+    const toast = document.getElementById('longpress-toast');
+    if (toast) toast.hidden = true;
+}
+
+function maybeShowLongPressToast(source) {
+    if (source !== 'geolocation-auto' && source !== 'url') return;
+    try {
+        if (sessionStorage.getItem(LONGPRESS_TOAST_KEY) === '1') return;
+        sessionStorage.setItem(LONGPRESS_TOAST_KEY, '1');
+    } catch { /* private mode など */ }
+
+    const toast = document.getElementById('longpress-toast');
+    if (!toast) return;
+    toast.hidden = false;
+}
+
 // ピンが変わるたびに取得し直す。古い応答は捨てる
 let forecastToken = 0;
 async function updateForecast(pin) {
     const token = ++forecastToken;
     const sections = ['forecast-msm', 'forecast-jma', 'forecast-aifs'];
-    document.getElementById('forecast-hint').hidden = !!pin;
+    updatePlaceHint(!!pin);
     if (!pin) {
         sections.forEach(id => { document.getElementById(id).hidden = true; });
         return;
@@ -1068,7 +1103,7 @@ async function createNowcastThunder() {
     );
     let strikeToken = 0;
 
-    // 落雷地点のマーカー。ピン（pin.js の PIN_ICON）と同じ作法で、白フチ付きの自前SVGにする。
+    // 落雷地点のマーカー。選択中バルーンと同じ作法で、白フチ付きの自前SVGにする。
     // 円だと目立たなかったので、意味も伝わる稲妻の形にした
     const STRIKE_ICON = L.divIcon({
         className: 'strike-marker',
@@ -1245,16 +1280,15 @@ function setSearchCollapsed(collapsed) {
 const COMPASS_16 = ['北', '北北東', '北東', '東北東', '東', '東南東', '南東', '南南東',
                     '南', '南南西', '南西', '西南西', '西', '西北西', '北西', '北北西'];
 
-// 操作パネルの「📍地点名 上12 / 中40 / 下80%」
+// 操作パネルの地点名（左に地図と同じバルーン）と雲量など
 function updatePinInfo() {
     const info = document.getElementById('pin-info');
     const pin = pinController && pinController.pin;
     info.hidden = !pin;
     if (!pin) return;
 
-    const nameEl = document.getElementById('pin-name');
-    nameEl.textContent = `📍${pin.name}`;
-    nameEl.title = pin.name;
+    const saved = !!(placesController && placesController.findAt(pin.lat, pin.lng));
+    renderPinNameLabel(document.getElementById('pin-name'), pin.name, { saved });
     if (placesController) {
         placesController.updatePinActionButton(document.getElementById('pin-place-btn'));
     }
@@ -1364,7 +1398,14 @@ function initFullscreen() {
     }
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && isFullscreen) setFullscreen(false);
+        if (e.key !== 'Escape') return;
+        // 長押し案内トーストを先に閉じる（全画面解除より優先）
+        const toast = document.getElementById('longpress-toast');
+        if (toast && !toast.hidden) {
+            hideLongPressToast();
+            return;
+        }
+        if (isFullscreen) setFullscreen(false);
     });
     document.querySelectorAll('.cloud-layer-tab').forEach((tab) => {
         tab.addEventListener('click', () => setCloudLayer(tab.dataset.layer));
@@ -1450,7 +1491,12 @@ function locateAndSetPin({ auto = false } = {}) {
             showStatus('');
             const { latitude, longitude } = position.coords;
             // まず座標のまま置き、住所が分かったら表示名だけ差し替える
-            pinController.set(latitude, longitude, `現在地（${formatLatLng(latitude, longitude)}）`);
+            pinController.set(
+                latitude,
+                longitude,
+                `現在地（${formatLatLng(latitude, longitude)}）`,
+                auto ? 'geolocation-auto' : 'geolocation'
+            );
             focusMap().setView([latitude, longitude], focusMap().getZoom());
             nameCurrentLocation(latitude, longitude);
         },
@@ -1502,7 +1548,7 @@ function updateOfflineBanner() {
     banner.hidden = false;
 }
 
-// ピン（クリック/長押しで置く・ドラッグで動かす・検索で置く・現在地で置く）
+// ピン（長押しで置く・ドラッグで動かす・検索で置く・現在地で置く）
 function initPin() {
     pinController = new PinController(maps, (pin) => {
         setSearchCollapsed(!!pin);
@@ -1511,6 +1557,7 @@ function initPin() {
         updatePinInfo();
         refreshTimeLabels();
         updateForecast(pin);
+        if (pin) maybeShowLongPressToast(pinController.lastSetSource);
         updateUrl(focusMap().getCenter(), focusMap().getZoom());
         if (placesController) placesController.onPinChange();
     }, {
@@ -1528,7 +1575,7 @@ function initPin() {
 
     const urlPin = getUrlParams().pin;
     if (urlPin) {
-        pinController.set(urlPin.lat, urlPin.lng, urlPin.name);
+        pinController.set(urlPin.lat, urlPin.lng, urlPin.name, 'url');
     }
 
     document.getElementById('pin-clear-btn').addEventListener('click', () => pinController.clear());
@@ -1583,6 +1630,10 @@ async function init() {
     initPin();
     initMapViewTabs();
     initFullscreen();
+    document.getElementById('longpress-toast-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideLongPressToast();
+    });
 
     // パラメータなしで開いたときは、現在地を自動で取ってピンを立てる。
     // 共有された URL（ピンや地図の位置つき）で開いた場合は、その指定を優先して何もしない

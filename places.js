@@ -1,6 +1,6 @@
-// 保存した地点（localStorage）。一覧UIは持たず、地図上の水色の丸とメニューだけで完結する。
-// 選択中の保存地点は同じマーカーを setIcon で赤ピンにし、未保存ピンだけ PinController が持つ。
-import { formatLatLng, PIN_ICON } from './pin.js';
+// 保存した地点（localStorage）。一覧UIは持たず、地図上のマーカーとメニューだけで完結する。
+// 非選択＝シアンの丸、選択中＝シアンのバルーン（setIcon）。未保存の選択だけ赤バルーン（PinController）。
+import { formatLatLng, CYAN_BALLOON_ICON, renderPinNameLabel } from './pin.js';
 
 const STORAGE_KEY = 'ccf-places';
 
@@ -258,11 +258,7 @@ export class PlacesController {
         const pin = this.pinController.pin;
         if (pin && samePoint(pin, { lat, lng })) {
             this.pinController.rename(name);
-            const nameEl = document.getElementById('pin-name');
-            if (nameEl) {
-                nameEl.textContent = `📍${name}`;
-                nameEl.title = name;
-            }
+            renderPinNameLabel(document.getElementById('pin-name'), name, { saved: true });
         }
         this.updatePinActionButton(document.getElementById('pin-place-btn'));
     }
@@ -286,7 +282,7 @@ export class PlacesController {
     }
 
     _applyMarkerState(marker, active) {
-        marker.setIcon(active ? PIN_ICON : PLACE_ICON);
+        marker.setIcon(active ? CYAN_BALLOON_ICON : PLACE_ICON);
         marker.setZIndexOffset(active ? 1000 : -200);
         if (marker.dragging) {
             if (active) marker.dragging.enable();
@@ -299,7 +295,7 @@ export class PlacesController {
         const active = !!(pin && samePoint(place, pin));
         const markers = this.maps.map((map, i) => {
             const marker = L.marker([place.lat, place.lng], {
-                icon: active ? PIN_ICON : PLACE_ICON,
+                icon: active ? CYAN_BALLOON_ICON : PLACE_ICON,
                 draggable: true,
                 autoPan: true,
                 zIndexOffset: active ? 1000 : -200,
@@ -316,7 +312,6 @@ export class PlacesController {
             });
             marker.on('dragstart', () => {
                 this._draggingPlaceId = place.id;
-                this.pinController.suppressMapClick();
             });
             marker.on('drag', (e) => {
                 const latlng = e.target.getLatLng();
@@ -327,10 +322,9 @@ export class PlacesController {
             });
             marker.on('dragend', (e) => {
                 const latlng = e.target.getLatLng();
-                this.pinController.suppressMapClick();
                 this._draggingPlaceId = null;
                 this._ignorePlaceClick = true;
-                // 保存座標は動かさない。ドロップ先を未保存ピンにする（シアンは元の位置に戻る）
+                // 保存座標は動かさない。ドロップ先を未保存の選択にする（シアンの丸は元の位置に戻る）
                 this.pinController.set(latlng.lat, latlng.lng);
                 setTimeout(() => { this._ignorePlaceClick = false; }, 0);
             });
@@ -363,7 +357,7 @@ export class PlacesController {
             markers.forEach((m) => this._applyMarkerState(m, active));
         }
 
-        // 保存地点が赤ピン役を担う／外すので、PinController 側のマーカー有無を揃える
+        // 保存地点が選択中バルーン役を担う／外すので、PinController 側の赤バルーン有無を揃える
         this.pinController.syncMarkers();
     }
 }
