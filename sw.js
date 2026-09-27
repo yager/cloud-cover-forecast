@@ -14,7 +14,7 @@
 // 付け方: 上げる日の日付 YYYY.MM.DD。同じ日に再上げするときは末尾 .1 .2 … を付ける
 // （例: 2026.09.28 → 2026.09.28.1）。毎回のバグ修正では上げない。
 // 上げるのはキャッシュ戦略・cache.addAll の構成変更、または古い控えを捨てたいときだけ。
-const VERSION = '2026.09.28';
+const VERSION = '2026.09.28.1';
 
 const SHELL = `ccf-shell-${VERSION}`; // 同オリジンのアプリ本体。オフライン時の控え
 const LIB = 'ccf-lib-v1';             // 版を固定してある外部ライブラリ
@@ -33,14 +33,14 @@ self.addEventListener('install', (event) => {
         await cache.addAll([
             './',
             './styles.css',
-            './app.js',
-            './msm.js',
-            './nowcast.js',
-            './pin.js',
-            './places.js',
-            './weather.js',
-            './colors.js',
-            './pressure-normals.js'
+            './js/app.js',
+            './js/msm.js',
+            './js/nowcast.js',
+            './js/pin.js',
+            './js/places.js',
+            './js/weather.js',
+            './js/colors.js',
+            './js/pressure-normals.js'
         ]);
         await self.skipWaiting();
     })());
