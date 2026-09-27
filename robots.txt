@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yager.github.io/cloud-cover-forecast/sitemap.xml
