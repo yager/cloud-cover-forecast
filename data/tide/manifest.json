@@ -1,0 +1,38 @@
+{
+  "fetched_at": "2026-09-28T00:39:35+00:00",
+  "years": [
+    2026,
+    2027
+  ],
+  "station_count": 239,
+  "station_sources": {
+    "2026": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/station2026.php",
+    "2027": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/station2027.php"
+  },
+  "readme": {
+    "stations": "stations.json",
+    "yearly_text": "{year}/{id}.txt",
+    "format": "https://www.data.jma.go.jp/kaiyou/db/tide/suisan/readme.html",
+    "note": "航海用ではない参考値。気象の影響で実測とずれることがある。"
+  },
+  "by_year": [
+    {
+      "year": 2026,
+      "files_ok_count": 239,
+      "files_missing_count": 0,
+      "files_missing": [],
+      "errors": [],
+      "total_bytes": 11951195,
+      "txt_url_template": "https://www.data.jma.go.jp/kaiyou/data/db/tide/suisan/txt/2026/{id}.txt"
+    },
+    {
+      "year": 2027,
+      "files_ok_count": 239,
+      "files_missing_count": 0,
+      "files_missing": [],
+      "errors": [],
+      "total_bytes": 11951195,
+      "txt_url_template": "https://www.data.jma.go.jp/kaiyou/data/db/tide/suisan/txt/2027/{id}.txt"
+    }
+  ]
+}

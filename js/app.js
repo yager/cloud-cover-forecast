@@ -1,5 +1,5 @@
 // 雲量予測の画面まわり。地図の初期化・表・ナウキャストのタイムラインなど。
-// データ取得そのものは msm.js / nowcast.js / weather.js / pin.js に分かれている。
+// データ取得そのものは msm.js / nowcast.js / weather.js / tide.js / pin.js に分かれている。
 
 import { PinController, setupSearch, formatLatLng, renderPinNameLabel } from './pin.js';
 import { PlacesController } from './places.js';
@@ -12,6 +12,7 @@ import {
 import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, THUNDER_COLORS, THUNDER_LABELS } from './colors.js';
 // 気圧痛の「絶対水準」の軸で使う、都道府県別の海面平年気圧
 import { MONTHLY_NORMAL_PRESSURE, nearestPrefectureIndex } from './pressure-normals.js';
+import { loadTideRow } from './tide.js';
 
 // マップオブジェクト。上中下は同時比較用に3枚、それ以外のタブは shared 1枚でオーバーレイ差替
 const maps = {
@@ -521,7 +522,9 @@ function renderTable(table, rows, times) {
         const tr = document.createElement('tr');
         tr.dataset.key = row.key;
         const th = document.createElement('th');
-        th.textContent = row.key;
+        // label があれば HTML（潮位の地点名など）。無ければ key をそのまま
+        if (row.label) th.innerHTML = row.label;
+        else th.textContent = row.key;
         tr.appendChild(th);
         row.cells.forEach((cell, i) => {
             const td = document.createElement('td');
@@ -640,8 +643,9 @@ function cloudCell(value) {
     return step === 0 ? html : { html, cls: `cloud-${step}` };
 }
 
-// 数値計算の結果（MSM・AIFS）の表。stepHours は1コマの長さ（気圧の変化量の計算に使う）
-function forecastRows(series, stepHours, pin) {
+// 数値計算の結果（MSM・AIFS）の表。stepHours は1コマの長さ（気圧の変化量の計算に使う）。
+// tideRow は1時間予測だけ（気象庁潮位表の最寄り地点）。AIFS には付けない。
+function forecastRows(series, stepHours, pin, tideRow = null) {
     const v = series.values;
 
     // 同じ日付の列をひとつのセルにまとめる。
@@ -654,7 +658,7 @@ function forecastRows(series, stepHours, pin) {
         else dateGroups.push({ html: label, colspan: 1, time: t });
     });
 
-    return [
+    const rows = [
         { key: '日付', cells: dateGroups.map(g => ({ ...g, cls: 'date-cell', html: `<span class="date-label">${g.html}</span>` })) },
         { key: '時刻', cells: series.times.map(formatHourLabel) },
         { key: '上層雲', cells: v.cloud_cover_high.map(cloudCell) },
@@ -674,6 +678,8 @@ function forecastRows(series, stepHours, pin) {
         { key: '湿度', cells: v.relative_humidity_2m.map(humidityCell) },
         { key: '気圧', cells: pressureCells(v.pressure_msl, stepHours, series.times, pin) }
     ];
+    if (tideRow) rows.push({ key: tideRow.key, label: tideRow.label, cells: tideRow.cells });
+    return rows;
 }
 
 // 気象庁の週間予報の表
@@ -694,12 +700,25 @@ function weeklyRows(weekly) {
     ];
 }
 
+function setMsmTideNote(html) {
+    const note = document.getElementById('msm-tide-note');
+    if (!note) return;
+    if (html) {
+        note.innerHTML = html;
+        note.hidden = false;
+    } else {
+        note.textContent = '';
+        note.hidden = true;
+    }
+}
+
 function showForecastError(sectionId, message) {
     const section = document.getElementById(sectionId);
     section.hidden = false;
     // 前の地点の補足情報（週間予報の予報区と発表時刻）が残らないように消す
     const meta = section.querySelector('.forecast-meta');
     if (meta) meta.textContent = '';
+    if (sectionId === 'forecast-msm') setMsmTideNote(null);
     section.querySelector('.table-container').innerHTML = `<p class="forecast-error">${message}</p>`;
 }
 
@@ -746,27 +765,38 @@ async function updateForecast(pin) {
     updatePlaceHint(!!pin);
     if (!pin) {
         sections.forEach(id => { document.getElementById(id).hidden = true; });
+        setMsmTideNote(null);
         return;
     }
 
-    Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(([forecast, baseTime]) => {
+    Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(async ([forecast, baseTime]) => {
         if (token !== forecastToken) return;
         markDataFetched();
         // 1時間予測は、雲量地図と同じ計算の範囲（基準時刻以降）だけを出す。
         // それより前の時刻は前の計算の値で、地図では選べないため
+        const msmSeries = trimSeriesBefore(forecast.msm, baseTime);
+        let tideRow = null;
+        try {
+            tideRow = await loadTideRow(pin.lat, pin.lng, msmSeries.times);
+        } catch (error) {
+            console.error('Failed to load tide row:', error);
+        }
+        if (token !== forecastToken) return;
+
         const sections = [
-            ['forecast-msm', trimSeriesBefore(forecast.msm, baseTime), 1],
-            ['forecast-aifs', forecast.aifs, 6]
+            ['forecast-msm', msmSeries, 1, tideRow],
+            ['forecast-aifs', forecast.aifs, 6, null]
         ];
-        for (const [id, series, stepHours] of sections) {
+        for (const [id, series, stepHours, tide] of sections) {
             const section = document.getElementById(id);
             section.hidden = false;
             const container = section.querySelector('.table-container');
             container.innerHTML = '<table></table>';
-            renderTable(container.firstChild, forecastRows(series, stepHours, pin), series.times);
+            renderTable(container.firstChild, forecastRows(series, stepHours, pin, tide), series.times);
             markPastCells();
             scrollToCurrentColumn(container);
         }
+        setMsmTideNote(tideRow ? tideRow.footnoteHtml : null);
         highlightForecastTime(document.getElementById('time-select').value);
         markSelectableTimes();
     }).catch((error) => {

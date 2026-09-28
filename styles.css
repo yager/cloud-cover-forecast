@@ -1012,6 +1012,14 @@ button, select, option, input {
     line-height: 1.5;
     color: #666;
 }
+#msm-tide-note {
+    margin-top: 6px;
+}
+/* 潮位の脚注番号。干潮側のベージュにそろえる */
+.tide-ref {
+    color: #a8905c;
+    font-weight: bold;
+}
 
 /* 説明は「i」を押したときだけ出す（繰り返し使うときに邪魔にならないように） */
 .info-btn {
@@ -1155,6 +1163,14 @@ button, select, option, input {
     /* 右に薄い影を落として、続きがあることを示す */
     box-shadow: 4px 0 5px -4px rgba(0, 0, 0, 0.2);
 }
+.table-container th small {
+    display: block;
+    font-weight: 400;
+    font-size: 10px;
+    line-height: 1.2;
+    color: #666;
+    white-space: nowrap;
+}
 .table-container td {
     font-variant-numeric: tabular-nums;
     min-width: 44px;
@@ -1214,6 +1230,19 @@ button, select, option, input {
 .table-container td.humid-1 { background: #e6ddf5; }
 .table-container td.humid-2 { background: #c3b2e6; }
 .table-container td.humid-3 { background: #9b86d6; color: white; }
+
+/* 潮位（天文潮）。局所±6h窓の中立は無色。満＝ティール、干＝くすんだカーキを5段階。
+   閾値は頂点付近を細かくし、中央の満／干が最濃色になるようにしてある */
+.table-container td.tide-high-1 { background: #eaf6f4; }
+.table-container td.tide-high-2 { background: #c5e8e3; }
+.table-container td.tide-high-3 { background: #8dcdc4; }
+.table-container td.tide-high-4 { background: #4faba0; color: white; }
+.table-container td.tide-high-5 { background: #2f7f76; color: white; }
+.table-container td.tide-low-1 { background: #f6f2e8; }
+.table-container td.tide-low-2 { background: #e6dcc0; }
+.table-container td.tide-low-3 { background: #d0bd8e; }
+.table-container td.tide-low-4 { background: #b89a5e; color: white; }
+.table-container td.tide-low-5 { background: #8f7340; color: white; }
 
 /* 風の強さ（5/10/15/20/25 m/s） */
 .table-container td.wind-1 { background: #eeffee; }

@@ -15,9 +15,13 @@ GitHub Pages に置いた静的ファイルだけで動きます。サーバー�
 | `js/places.js` | 保存地点（localStorage、シアンの丸／選択中はシアンのバルーン、登録・編集・削除 UI） |
 | `js/weather.js` | 地点の予測値と気象庁の週間予報の取得、天気コードの対応表 |
 | `js/pressure-normals.js` | 気圧痛の「平年値比」軸用。都道府県別・月別の海面平年気圧（1991〜2020） |
+| `js/tide.js` | 気象庁潮位表（同梱）の最寄り地点・毎時値・局所±6h正規化。1時間予測表の潮位行 |
 | `js/colors.js` | 地図の配色定数（凡例と描画で共有） |
 | `sw.js` | Service Worker（ルートに置く。PWA インストール用。本体はネットワーク優先） |
 | `docs/legend.svg` | README に載せる色の凡例（手で編集せず、作り直す） |
+| `data/tide/` | 気象庁潮位表の同梱データ（`stations.json`・年次 `{year}/{id}.txt`） |
+| `scripts/fetch_tide_data.py` | 上記潮位データを気象庁から取り直すスクリプト（年1回想定） |
+| `.github/workflows/fetch-tide-data.yml` | 同スクリプトの年次／手動実行 |
 
 外部ライブラリは CDN から読み込みます（Leaflet、SunCalc、`@openmeteo/file-reader`）。`@openmeteo/file-reader` は README に「本番向けではない」と書かれているため、`index.html` の import map で版を固定しています。
 
@@ -76,6 +80,7 @@ GitHub Pages に置いた静的ファイルだけで動きます。サーバー�
   - **下降**（3段階のピンク）: 6時間で 2/4/6hPa、24時間で 5/8/12hPa、その都道府県・月の平年値より 3/6/10hPa 低い
   - **上昇**（単色の青）: 6時間で 2hPa 以上、または 24時間で 5hPa 以上があれば付く（段階なし。下降ほど根拠が強くないため）
   - 平年値は `js/pressure-normals.js`（固定の 1013hPa は使わない。季節差が大きいため）
+- 潮位行（1時間予測のみ）は `js/tide.js`。最寄りの潮位表掲載地点の毎時 cm を出し、色は前後±6時間の局所相対（満＝ティール、干＝カーキ、中立は無色）。暦日 max/min は使わない（半日周潮・日潮不等のため）。詳細は [data-sources.md](data-sources.md) と `data/tide/README.md`。
 
 ## 地点の選択（`js/pin.js`）
 

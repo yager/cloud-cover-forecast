@@ -176,8 +176,10 @@
             気温は地点の標高に合わせて補正した値です。
             気圧の色は、6時間の変化（±2/4/6hPa）と24時間の変化（±5/8/12hPa）の強いほうで付けた気圧痛の目安です。
             医学的な診断ではなく、感じ方には個人差があります。
+            潮位は最寄りの気象庁潮位表掲載地点の天文潮（推算）です。色は前後約6時間の局所的な山（満）と谷（干）を示し、中ほどは平常です。航海用ではなく、気象の影響で実測とずれることがあります。
         </div>
         <div class="table-container"><table id="msm-table"></table></div>
+        <p class="forecast-meta" id="msm-tide-note" hidden></p>
     </section>
     
     <section id="forecast-aifs" class="forecast forecast-model" hidden>
@@ -212,6 +214,7 @@
         <div class="credit">地図・場所検索: <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a></div>
         <div class="credit">雲量・風の地図・1時間予測・2週間予測: 気象庁MSM / ECMWF AIFS / データ <a href="https://open-meteo.com/">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/deed.ja">CC BY 4.0</a>)</div>
         <div class="credit">週間予報: <a href="https://www.jma.go.jp/bosai/forecast/">気象庁</a></div>
+        <div class="credit">潮位（1時間予測表）: <a href="https://www.data.jma.go.jp/kaiyou/db/tide/suisan/">気象庁潮位表</a>（天文潮の推算。航海用ではありません）</div>
         <div class="credit">降水・雷の地図: <a href="https://www.jma.go.jp/bosai/nowc/">気象庁ナウキャスト</a></div>
         <div class="notice">雲量・風の地図・1時間予測・2週間予測は、数値予報モデルが計算した予測値をそのまま表示したものです。気象庁が発表する天気予報とは別のもので、誤差を含みます。週間予報は気象庁が発表した予報、降水・雷の地図は気象庁の観測・解析です。</div>
         <div class="notice">アクセス解析に Google Analytics を使っています（Cookieを利用します）。地点の座標や地名は送信していません。詳しくは<a href="https://policies.google.com/technologies/partner-sites">Googleのポリシー</a>をご覧ください。</div>
