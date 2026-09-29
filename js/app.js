@@ -837,10 +837,11 @@ function updatePlaceHint(hasPin) {
     el.append(strong, '（約0.5秒）すると、その地点の予測を表示します。検索や現在地でも選べます。');
 }
 
-// 未選択時の長押しヒントを見ずに地点が入ったとき、地図上トーストで教える（セッション1回）
+// 未選択時の長押しヒントを見ずに地点が入ったとき、地図上トーストで教える（端末ごとに1回）。
 // - geolocation-auto: パラメータ無し起動からの自動現在地
 // - url: 共有/前回の ?pin=… で復元（自動現在地のあと URL に pin が残るので、リロードはこちら）
-// 検索・手動現在地・長押し・ドラッグ・保存地点では出さない
+// 検索・手動現在地・長押し・ドラッグ・保存地点では出さない。
+// sessionStorage だと PWA の起動ごとにセッションが切れ、毎回出てしまうので localStorage にする
 const LONGPRESS_TOAST_KEY = 'ccf-longpress-toast';
 
 function hideLongPressToast() {
@@ -851,8 +852,8 @@ function hideLongPressToast() {
 function maybeShowLongPressToast(source) {
     if (source !== 'geolocation-auto' && source !== 'url') return;
     try {
-        if (sessionStorage.getItem(LONGPRESS_TOAST_KEY) === '1') return;
-        sessionStorage.setItem(LONGPRESS_TOAST_KEY, '1');
+        if (localStorage.getItem(LONGPRESS_TOAST_KEY) === '1') return;
+        localStorage.setItem(LONGPRESS_TOAST_KEY, '1');
     } catch { /* private mode など */ }
 
     const toast = document.getElementById('longpress-toast');
