@@ -26,6 +26,7 @@ const maps = {
 const sharedMap = {
     overlays: {
         total: null,
+        msmPrecip: null,
         wind: null,
         rain: null,
         thunderArea: null,
@@ -142,11 +143,14 @@ function focusMap() {
 function applySharedMapView(view) {
     if (!maps.shared) return;
     const o = sharedMap.overlays;
-    for (const layer of [o.total, o.wind, o.rain, o.thunderArea, o.thunderMarkers]) {
+    for (const layer of [o.total, o.msmPrecip, o.wind, o.rain, o.thunderArea, o.thunderMarkers]) {
         if (layer && maps.shared.hasLayer(layer)) maps.shared.removeLayer(layer);
     }
-    if (view === 'total' && o.total) o.total.addTo(maps.shared);
-    else if (view === 'wind' && o.wind) o.wind.addTo(maps.shared);
+    if (view === 'total') {
+        // 雲の上にMSM降水（常時）。追加順で手前になるが、降水は overlayPane でもある
+        if (o.total) o.total.addTo(maps.shared);
+        if (o.msmPrecip) o.msmPrecip.addTo(maps.shared);
+    } else if (view === 'wind' && o.wind) o.wind.addTo(maps.shared);
     else if (view === 'rain' && o.rain) o.rain.addTo(maps.shared);
     else if (view === 'thunder') {
         if (o.thunderArea) o.thunderArea.addTo(maps.shared);
@@ -186,33 +190,120 @@ function initMaps() {
 
     Object.values(maps).forEach((map) => map.setView(initialCenter, initialZoom));
 
-    // 国土地理院の陰影起伏図を暗く落とした下地に、白地図の輪郭線を重ねる。
-    // 地名などの文字情報を減らし、起伏と県の輪郭だけが分かる状態にしている。
-    // 無彩色にしてあるのは、下地の色が雲量の色と競合しないようにするため。
+    // 国土地理院の陰影＋白地図（下）で海を黒く保ち、同じ白地図を手前にも載せて境界・地名を読む。
+    // 手前だけだと白抜きの向こうが明るく見えやすい。下の invert+lighten は陰影と同じペインなので効く。
     // native ズームは地理院タイルの提供範囲（陰影起伏図 2〜16、白地図 5〜14）。
     // 範囲外のズームでは端のタイルを拡大・縮小して使う（指定しないと 404 になる）
-    const BASE_TILES = [
-        { url: 'https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png', minNativeZoom: 2, maxNativeZoom: 16, className: 'hillshade-dark-tile' },
-        { url: 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png', minNativeZoom: 5, maxNativeZoom: 14, className: 'blank-line-tile' }
-    ];
+    const HILLSHADE_TILE = {
+        url: 'https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png',
+        minNativeZoom: 2,
+        maxNativeZoom: 16,
+        className: 'hillshade-dark-tile'
+    };
+    const BLANK_TILE = {
+        url: 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png',
+        minNativeZoom: 5,
+        maxNativeZoom: 14
+    };
+
+    // 白地図（黒線・白地）→ 白線・透明地。読みやすさ用に右下 1px の黒を画素へ焼き込む
+    // （CSS filter の drop-shadow はパン中も毎フレーム効くので使わない）
+    const BlankLinesLayer = L.TileLayer.extend({
+        createTile(coords, done) {
+            const canvas = L.DomUtil.create('canvas', 'blank-line-tile');
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const w = img.naturalWidth;
+                    const h = img.naturalHeight;
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(img, 0, 0);
+                    const image = ctx.getImageData(0, 0, w, h);
+                    const src = image.data;
+                    const out = new Uint8ClampedArray(src.length);
+                    // 1) 線マスクを白アルファとして集めつつ、右下 1px に黒を置く
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const i = (y * w + x) * 4;
+                            const srcA = src[i + 3];
+                            if (srcA === 0) continue;
+                            const a = Math.round((255 - (src[i] + src[i + 1] + src[i + 2]) / 3) * (srcA / 255));
+                            if (a < 8) continue;
+                            const sx = x + 1;
+                            const sy = y + 1;
+                            if (sx < w && sy < h) {
+                                const si = (sy * w + sx) * 4;
+                                out[si + 3] = Math.max(out[si + 3], a);
+                            }
+                        }
+                    }
+                    // 2) 本体の白を上書き（同じ画素では白が勝つ）
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const i = (y * w + x) * 4;
+                            const srcA = src[i + 3];
+                            if (srcA === 0) continue;
+                            const a = Math.round((255 - (src[i] + src[i + 1] + src[i + 2]) / 3) * (srcA / 255));
+                            if (a < 8) continue;
+                            out[i] = 255;
+                            out[i + 1] = 255;
+                            out[i + 2] = 255;
+                            out[i + 3] = a;
+                        }
+                    }
+                    image.data.set(out);
+                    ctx.putImageData(image, 0, 0);
+                    done(null, canvas);
+                } catch (err) {
+                    done(err, canvas);
+                }
+            };
+            img.onerror = () => done(new Error('blank tile'), canvas);
+            img.src = this.getTileUrl(coords);
+            return canvas;
+        }
+    });
 
     for (const map of Object.values(maps)) {
-        // 雲量レイヤー（既定の tilePane、z-index 200）より下に敷く
-        const pane = map.createPane('baseDark');
-        pane.classList.add('base-dark-pane');
-        pane.style.zIndex = '199';
-        for (const tile of BASE_TILES) {
-            L.tileLayer(tile.url, {
-                pane: 'baseDark',
-                className: tile.className,
-                // CORS で取ると Service Worker が中身を見られる。
-                // 素の img のままだと不透明な応答になり、保存容量が実際よりはるかに大きく計上される
-                crossOrigin: 'anonymous',
-                maxZoom: 18,
-                minNativeZoom: tile.minNativeZoom,
-                maxNativeZoom: tile.maxNativeZoom
-            }).addTo(map);
-        }
+        // 陰影＋下白地図は雲（tilePane 200）より下。手前白地図は降水（400）より上、ピン（600）より下
+        const basePane = map.createPane('baseDark');
+        basePane.classList.add('base-dark-pane');
+        basePane.style.zIndex = '199';
+        const linesPane = map.createPane('baseLines');
+        linesPane.style.zIndex = '450';
+        linesPane.style.pointerEvents = 'none';
+
+        const commonTile = {
+            // CORS で取ると Service Worker が中身を見られる。
+            // 素の img のままだと不透明な応答になり、保存容量が実際よりはるかに大きく計上される
+            crossOrigin: 'anonymous',
+            maxZoom: 18
+        };
+        L.tileLayer(HILLSHADE_TILE.url, {
+            ...commonTile,
+            pane: 'baseDark',
+            className: HILLSHADE_TILE.className,
+            minNativeZoom: HILLSHADE_TILE.minNativeZoom,
+            maxNativeZoom: HILLSHADE_TILE.maxNativeZoom
+        }).addTo(map);
+        // 下: 従来どおり invert+lighten。白地→黒になり海・雲の下地が暗くなる（キャッシュ済みなら増分ほぼなし）
+        L.tileLayer(BLANK_TILE.url, {
+            ...commonTile,
+            pane: 'baseDark',
+            className: 'blank-under-tile',
+            minNativeZoom: BLANK_TILE.minNativeZoom,
+            maxNativeZoom: BLANK_TILE.maxNativeZoom
+        }).addTo(map);
+        // 上: 線・地名だけ（右下 1px 黒は画素に焼済）
+        new BlankLinesLayer(BLANK_TILE.url, {
+            ...commonTile,
+            pane: 'baseLines',
+            minNativeZoom: BLANK_TILE.minNativeZoom,
+            maxNativeZoom: BLANK_TILE.maxNativeZoom
+        }).addTo(map);
     }
 
     // 上中下は固定ラベル。shared はタブに応じて中身を差し替える
@@ -239,12 +330,17 @@ function initMaps() {
     // WIND_STEPS は強い順（WindGridLayer の検索順）なので、凡例用に弱い順へ並べ替える。
     // 2 m/s未満は地図上では透明なので先頭に空欄を1つ足す
     const windAscending = [...WIND_STEPS].reverse();
+    // 降水凡例の目盛りは境目すべてだと詰まるので、1・10・30・80 だけ出す（位置は8色の境目に合わせる）
+    const rainLegendLabels = RAIN_THRESHOLDS.map((t) => ([1, 10, 30, 80].includes(t) ? t : ''));
+    const rainLegend = legendBar(RAIN_COLORS.map((hex) => `#${hex}`), rainLegendLabels, 'mm/h');
     Object.assign(SHARED_LEGENDS, {
+        // 全雲量タブ：雲の上に重ねている MSM 降水の凡例（色はナウキャストと同じ）
+        total: rainLegend,
         wind: legendBar(
             ['transparent', ...windAscending.map((s) => `rgba(${s.rgba[0]},${s.rgba[1]},${s.rgba[2]},${(s.rgba[3] / 255).toFixed(2)})`)],
             windAscending.map((s) => s.min), 'm/s'
         ),
-        rain: legendBar(RAIN_COLORS.map((hex) => `#${hex}`), RAIN_THRESHOLDS, 'mm/h'),
+        rain: rainLegend,
         thunder: '<div class="legend-levels">' + THUNDER_COLORS.map((hex, i) =>
             `<i style="background:#${hex}" title="${THUNDER_LABELS[i]}">${i + 1}</i>`
         ).join('') + '</div>'
@@ -291,11 +387,15 @@ function initMaps() {
     }
 }
 
-// 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）
+// 連続量の帯。colors は境目の数+1、labels は境目の数ぶん（境目に目盛りを置く）。
+// labels の空文字は飛ばす（降水で目盛りを間引くときに使う）
 function legendBar(colors, labels, unit) {
     const swatches = colors.map((c) => `<i style="background:${c}"></i>`).join('');
     const n = colors.length;
-    const ticks = labels.map((label, i) => `<span style="left:${(i + 1) / n * 100}%">${label}</span>`).join('');
+    const ticks = labels.map((label, i) => {
+        if (label === '' || label == null) return '';
+        return `<span style="left:${(i + 1) / n * 100}%">${label}</span>`;
+    }).join('');
     return `<div class="legend-bar">${swatches}</div><div class="legend-ticks">${ticks}</div><div class="legend-caption">${unit}</div>`;
 }
 
@@ -445,15 +545,17 @@ async function createMsmSource(onFrame) {
     let requestedTime = null;
     let currentFrame = null;
 
-    // 上中下は各地図に常駐。全雲量・風は shared に載せ替えて使う
+    // 上中下は各地図に常駐。全雲量・MSM降水・風は shared に載せ替えて使う
     const layers = {
         total: new msm.CloudGridLayer(),
+        msmPrecip: new msm.PrecipGridLayer(),
         wind: new msm.WindGridLayer(),
         upper: new msm.CloudGridLayer().addTo(maps.upper),
         middle: new msm.CloudGridLayer().addTo(maps.middle),
         lower: new msm.CloudGridLayer().addTo(maps.lower)
     };
     sharedMap.overlays.total = layers.total;
+    sharedMap.overlays.msmPrecip = layers.msmPrecip;
     sharedMap.overlays.wind = layers.wind;
     applySharedMapView(mapView);
 
@@ -496,6 +598,7 @@ async function createMsmSource(onFrame) {
             layers.middle.setValues(frame.middle);
             layers.lower.setValues(frame.lower);
             layers.wind.setValues(frame.wind);
+            layers.msmPrecip.setValues(frame.precip);
             onFrame();
 
             // 次のコマを先読み

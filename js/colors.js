@@ -24,6 +24,10 @@ export const RAIN_COLORS = ['f2f2ff', 'a0d2ff', '218cff', '0041ff', 'faf500', 'f
 // 凡例パネルで確認した値
 export const RAIN_THRESHOLDS = [1, 5, 10, 20, 30, 50, 80];
 
+// 全雲量地図にMSM降水を重ねるときのアルファ（案A）。RAIN_COLORS と同じ順・8段。
+// 弱い雨は白雲の上で消えないよう相対的に厚め、強い雨はほぼ不透明
+export const MSM_PRECIP_ALPHAS = [120, 140, 160, 180, 190, 200, 210, 220];
+
 // 雷ナウキャストの活動度1〜4。気象庁「雷ナウキャストの見方」
 // (https://www.jma.go.jp/jma/kishou/know/toppuu/thunder2-2.html) の
 // 「活動度と行動の対応」表の画像から、スウォッチの画素を実測して取得した。

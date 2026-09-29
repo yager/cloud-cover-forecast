@@ -4,7 +4,7 @@
 // どちらも「GRID 定義 + 層ごとの Uint8Array（0〜100%、MISSING=欠測、行0が南端）」だけでやり取りするので、
 // 将来 GitHub Actions で事前変換した uint8 バイナリを読むソースに差し替えても描画側はそのまま使える。
 import { OmFileReader, FileBackend, OmDataType } from '@openmeteo/file-reader';
-import { WIND_STEPS } from './colors.js';
+import { WIND_STEPS, RAIN_COLORS, RAIN_THRESHOLDS, MSM_PRECIP_ALPHAS } from './colors.js';
 
 const OM_BASE = 'https://openmeteo.s3.amazonaws.com/data_spatial/jma_msm';
 
@@ -27,10 +27,15 @@ export const LEVEL_VARIABLES = {
 // 10m の風。u/v はそのままでは使わず、風速と風向に直して持つ
 export const WIND_VARIABLES = { u: 'wind_u_component_10m', v: 'wind_v_component_10m' };
 
+export const PRECIP_VARIABLE = 'precipitation';
+
 export const MISSING = 255;
 
 // 風速の刻み。speed は 0.25 m/s 単位の Uint8（0〜63.75 m/s）で持つ
 export const WIND_SPEED_UNIT = 0.25;
+
+// 降水の刻み。0.5 mm/h 単位の Uint8（MISSING=255 を欠測に使うので最大 127 mm/h）
+export const PRECIP_UNIT = 0.5;
 
 // 雲量の配色。黒い下地に重ねるので、雲が多いほど白く濃くなる。
 // 区切りは 20/40/60/80/100% の5段階で、20%未満と欠測は透明。
@@ -66,6 +71,31 @@ const WIND_LUT = (() => {
         const speed = v * WIND_SPEED_UNIT;
         const step = WIND_STEPS.find(s => speed >= s.min);
         if (step) lut.set(step.rgba, v * 4);
+    }
+    return lut;
+})();
+
+// MSM降水 → RGBA。色はナウキャスト（RAIN_COLORS）と同じ、アルファは雲の上用（MSM_PRECIP_ALPHAS）。
+// 0.1 mm/h 未満と欠測は透明
+const PRECIP_LUT = (() => {
+    const lut = new Uint8ClampedArray(256 * 4);
+    const rgb = RAIN_COLORS.map((hex) => [
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16)
+    ]);
+    for (let v = 0; v < 255; v++) {
+        const mm = v * PRECIP_UNIT;
+        if (mm < 0.1) continue;
+        let rank = 0; // 0..7 → RAIN_COLORS
+        while (rank < RAIN_THRESHOLDS.length && mm >= RAIN_THRESHOLDS[rank]) rank += 1;
+        const [r, g, b] = rgb[rank];
+        const a = MSM_PRECIP_ALPHAS[rank];
+        const i = v * 4;
+        lut[i] = r;
+        lut[i + 1] = g;
+        lut[i + 2] = b;
+        lut[i + 3] = a;
     }
     return lut;
 })();
@@ -147,9 +177,38 @@ export class MsmOmSource {
                     variable.dispose();
                 }
             }));
-            return { ...Object.fromEntries(entries), wind: await this._readWind(reader) };
+            return {
+                ...Object.fromEntries(entries),
+                wind: await this._readWind(reader),
+                precip: await this._readPrecip(reader)
+            };
         } finally {
             reader.dispose();
+        }
+    }
+
+    // 降水量（mm/h）を 0.5 mm/h 単位の Uint8 に落とす（MISSING=255）
+    async _readPrecip(reader) {
+        const variable = await reader.getChildByName(PRECIP_VARIABLE);
+        if (!variable) throw new Error(`${PRECIP_VARIABLE} が見つかりません`);
+        try {
+            const dims = variable.getDimensions();
+            if (dims[0] !== GRID.ny || dims[1] !== GRID.nx) {
+                throw new Error(`${PRECIP_VARIABLE} の格子が想定外です: ${dims.join('x')}`);
+            }
+            const values = await variable.read({
+                type: OmDataType.FloatArray,
+                ranges: dims.map(d => ({ start: 0, end: d }))
+            });
+            const out = new Uint8Array(values.length);
+            for (let i = 0; i < values.length; i++) {
+                const v = values[i];
+                if (Number.isNaN(v)) out[i] = MISSING;
+                else out[i] = Math.min(254, Math.max(0, Math.round(v / PRECIP_UNIT)));
+            }
+            return out;
+        } finally {
+            variable.dispose();
         }
     }
 
@@ -443,5 +502,63 @@ export const WindGridLayer = L.GridLayer.extend({
                 ctx.globalAlpha = 1;
             }
         }
+    }
+});
+
+// 全雲量の上に重ねる MSM 降水。色はナウキャストと同じ、アルファは雲の上用。
+// pane を overlayPane にして雲（tilePane）より手前に置く。補間なし最近傍。
+export const PrecipGridLayer = L.GridLayer.extend({
+    options: {
+        bounds: L.latLngBounds(GRID_BOUNDS),
+        pane: 'overlayPane'
+    },
+
+    setValues(values) {
+        this._values = values;
+        for (const key in this._tiles) {
+            const tile = this._tiles[key];
+            this._drawTile(tile.el, tile.coords);
+        }
+    },
+
+    createTile(coords) {
+        const tile = L.DomUtil.create('canvas', 'precip-grid-tile');
+        const size = this.getTileSize();
+        const ratio = window.devicePixelRatio || 1;
+        tile.width = Math.round(size.x * ratio);
+        tile.height = Math.round(size.y * ratio);
+        this._drawTile(tile, coords);
+        return tile;
+    },
+
+    _drawTile(canvas, coords) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        if (!this._values) return;
+
+        const { cols, rows } = gridIndices(coords, w, h);
+        const image = ctx.createImageData(w, h);
+        const pixels = image.data;
+        const values = this._values;
+        for (let py = 0; py < h; py++) {
+            const iy = rows[py];
+            if (iy < 0) continue;
+            const rowOffset = iy * GRID.nx;
+            let p = py * w * 4;
+            for (let px = 0; px < w; px++, p += 4) {
+                const ix = cols[px];
+                if (ix < 0) continue;
+                const v = values[rowOffset + ix];
+                if (v === MISSING) continue;
+                const c = v * 4;
+                pixels[p] = PRECIP_LUT[c];
+                pixels[p + 1] = PRECIP_LUT[c + 1];
+                pixels[p + 2] = PRECIP_LUT[c + 2];
+                pixels[p + 3] = PRECIP_LUT[c + 3];
+            }
+        }
+        ctx.putImageData(image, 0, 0);
     }
 });
