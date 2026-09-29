@@ -1313,6 +1313,60 @@ button, select, option, input {
     line-height: 1.6;
     color: #666;
 }
+
+/* 週間予報の下・フッターの上。iOS / Android のブラウザ閲覧時だけ表示（PWA 単体起動時は出さない） */
+.install-guide {
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px 10px 16px;
+    border-top: 1px solid #c5daf0;
+    background: linear-gradient(160deg, #eef6ff 0%, #b7d6f5 50%, #7eb4e8 100%);
+    box-sizing: border-box;
+}
+.install-guide-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #444;
+}
+.install-guide-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+}
+.install-guide-icon {
+    flex: 0 0 auto;
+    width: 88px;
+    height: auto;
+    border-radius: 10px;
+    background: #111;
+}
+.install-guide-copy {
+    flex: 1 1 220px;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #333;
+}
+.install-guide-copy > p {
+    margin: 0 0 8px;
+}
+.install-guide-steps {
+    margin: 0 0 8px;
+    padding-left: 1.3em;
+}
+.install-guide-steps li {
+    margin: 2px 0;
+}
+.install-guide-note {
+    margin: 0;
+    font-size: 12px;
+    color: #333;
+}
 .footer-heading {
     margin-bottom: 4px;
     font-size: 12px;

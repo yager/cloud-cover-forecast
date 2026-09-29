@@ -849,6 +849,29 @@ function hideLongPressToast() {
     if (toast) toast.hidden = true;
 }
 
+// 週間予報下のホーム画面追加案内。iOS / Android のブラウザ表示時だけ。
+// すでに PWA として単体起動しているときは出さない
+function initInstallGuide() {
+    const root = document.getElementById('install-guide');
+    if (!root) return;
+
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    if (standalone) return;
+
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua)
+        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    const platform = isIOS ? 'ios' : (isAndroid ? 'android' : null);
+    if (!platform) return;
+
+    const steps = root.querySelector(`.install-guide-steps[data-platform="${platform}"]`);
+    if (!steps) return;
+    steps.hidden = false;
+    root.hidden = false;
+}
+
 function maybeShowLongPressToast(source) {
     if (source !== 'geolocation-auto' && source !== 'url') return;
     try {
@@ -1788,6 +1811,7 @@ async function init() {
 
     initInfoPopovers();
     initTimeCellLinks();
+    initInstallGuide();
 
     window.addEventListener('online', updateOfflineBanner);
     window.addEventListener('offline', updateOfflineBanner);
