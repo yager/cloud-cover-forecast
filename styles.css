@@ -1187,9 +1187,17 @@ button, select, option, input {
     border-right: 1px solid #ccc;
     border-bottom: 1px solid #ccc;
 }
-.table-container tr[data-key="日付"] td {
-    background: #eef;
+.table-container tr[data-key="日付"] td,
+.table-container tr[data-key="時刻"] td {
+    background: #eee;
     font-weight: bold;
+}
+/* 雲ブロック（上層〜下層）の上下だけ二重線 */
+.table-container tr[data-key="降水量"] th,
+.table-container tr[data-key="降水量"] td,
+.table-container tr[data-key="下層雲"] th,
+.table-container tr[data-key="下層雲"] td {
+    border-bottom: 3px double #ccc;
 }
 /* 同じ日をまとめたセル（1時間予測・2週間予測）だけ左寄せにする */
 .table-container td.date-cell {
@@ -1267,9 +1275,10 @@ button, select, option, input {
     background: white;
     color: #ccc;
 }
-/* 日付の行は見出しなので背景を変えない */
-.table-container tr[data-key="日付"] td.past {
-    background-color: #eef;
+/* 日付・時刻の行は見出しなので背景を変えない */
+.table-container tr[data-key="日付"] td.past,
+.table-container tr[data-key="時刻"] td.past {
+    background-color: #eee;
     color: inherit;
 }
 .table-container td.pin-time {
@@ -1299,7 +1308,13 @@ button, select, option, input {
     color: #888;
     font-size: 9px;
 }
+.forecast-loading {
+    margin: 8px 0;
+    font-size: 12px;
+    color: #666;
+}
 .forecast-error {
+    margin: 8px 0;
     font-size: 12px;
     color: #b00;
 }

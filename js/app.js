@@ -487,7 +487,9 @@ function timeLabel(utcKey) {
 
 function refreshTimeLabels() {
     for (const option of document.getElementById('time-select').options) {
-        if (option.value) option.textContent = timeLabel(option.value);
+        // value が空（取得中のプレースホルダ）や不正な時刻は触らない
+        if (!option.value || Number.isNaN(new Date(option.value).getTime())) continue;
+        option.textContent = timeLabel(option.value);
     }
 }
 
@@ -764,11 +766,11 @@ function forecastRows(series, stepHours, pin, tideRow = null) {
     const rows = [
         { key: '日付', cells: dateGroups.map(g => ({ ...g, cls: 'date-cell', html: `<span class="date-label">${g.html}</span>` })) },
         { key: '時刻', cells: series.times.map(formatHourLabel) },
+        { key: '気温', cells: v.temperature_2m.map(temperatureCell) },
+        { key: '降水量', cells: v.precipitation.map(rainCell) },
         { key: '上層雲', cells: v.cloud_cover_high.map(cloudCell) },
         { key: '中層雲', cells: v.cloud_cover_mid.map(cloudCell) },
         { key: '下層雲', cells: v.cloud_cover_low.map(cloudCell) },
-        { key: '気温', cells: v.temperature_2m.map(temperatureCell) },
-        { key: '降水量', cells: v.precipitation.map(rainCell) },
         { key: '風', cells: v.wind_speed_10m.map((speed, i) => {
             const dir = v.wind_direction_10m[i];
             const arrow = dir === null ? '' : `<span class="wind-arrow" style="transform: rotate(${dir}deg)">↓</span>`;
@@ -815,13 +817,24 @@ function setMsmTideNote(html) {
     }
 }
 
-function showForecastError(sectionId, message) {
+function prepareForecastSection(sectionId) {
     const section = document.getElementById(sectionId);
     section.hidden = false;
     // 前の地点の補足情報（週間予報の予報区と発表時刻）が残らないように消す
     const meta = section.querySelector('.forecast-meta');
     if (meta) meta.textContent = '';
     if (sectionId === 'forecast-msm') setMsmTideNote(null);
+    return section;
+}
+
+function showForecastLoading(sectionId) {
+    const section = prepareForecastSection(sectionId);
+    section.querySelector('.table-container').innerHTML =
+        '<p class="forecast-loading">データを取得しています。</p>';
+}
+
+function showForecastError(sectionId, message) {
+    const section = prepareForecastSection(sectionId);
     section.querySelector('.table-container').innerHTML = `<p class="forecast-error">${message}</p>`;
 }
 
@@ -895,6 +908,10 @@ async function updateForecast(pin) {
         setMsmTideNote(null);
         return;
     }
+
+    // 1時間・2週間は見出しを先に出し、表だけ待ち表示。週間予報より遅くても急に現れない
+    showForecastLoading('forecast-msm');
+    showForecastLoading('forecast-aifs');
 
     Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(async ([forecast, baseTime]) => {
         if (token !== forecastToken) return;
@@ -1295,7 +1312,7 @@ async function createNowcastThunder() {
 // 雲量地図で選んでいる時刻の列を赤線で囲み、その列まで横スクロールする。
 // 同じMSMの同じ時刻である1時間予測だけが対象（2週間予測は別のモデル）
 function highlightForecastTime(utcTime) {
-    // プルダウンがまだ「データ取得中...」のときは時刻として解釈できない
+    // プルダウンがまだ取得中（value 空）のときは時刻として解釈できない
     const date = utcTime ? new Date(utcTime) : null;
     const key = date && !Number.isNaN(date.getTime()) ? jstKey(date) : null;
     const container = document.querySelector('#forecast-msm .table-container');
