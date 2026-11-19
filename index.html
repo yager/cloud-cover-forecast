@@ -168,8 +168,10 @@
     </div>
     
     <section id="forecast-msm" class="forecast forecast-model" hidden>
+        <p id="forecast-fallback-notice" class="forecast-fallback-notice" hidden><span class="fallback-mark">※</span> Open-Meteo の API が応答しないため、1時間予測・2週間予測は S3 の公開データから直接読んだ格子点の値です。標高の補正をしていないので、山間部や海沿いでは気温などが実際と大きく違うことがあります。API が応答すれば置き換わります。</p>
         <h2>1時間予測 <small>気象庁MSM</small>
             <button class="info-btn" type="button" popovertarget="info-msm" aria-label="このデータについて">ⓘ</button>
+            <span class="fallback-mark fallback-flag" title="API が応答しないため、標高補正なしの値です" hidden>※</span>
         </h2>
         <div id="info-msm" class="info-popover" popover>
             気象庁メソモデル（MSM）の計算値です。気象庁が発表する天気予報とは別のもので、誤差を含みます。
@@ -185,6 +187,7 @@
     <section id="forecast-aifs" class="forecast forecast-model" hidden>
         <h2>2週間予測 <small>ECMWF AIFS</small>
             <button class="info-btn" type="button" popovertarget="info-aifs" aria-label="このデータについて">ⓘ</button>
+            <span class="fallback-mark fallback-flag" title="API が応答しないため、標高補正なしの値です" hidden>※</span>
         </h2>
         <div id="info-aifs" class="info-popover" popover>
             ECMWFのAIモデル（AIFS）の計算値です。6時間ごとの値をそのまま並べています。先になるほど誤差が大きくなります。

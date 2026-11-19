@@ -1017,6 +1017,21 @@ button, select, option, input {
     line-height: 1.5;
     color: #666;
 }
+/* API が応答せず S3 の値を出しているときの注意。1時間予測の上に1か所だけ出し、
+   両方の見出しには赤い※を付けて、どちらにも当てはまることを示す */
+.forecast-fallback-notice {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #4a2a31;
+    background: #fde8ec;
+    border-radius: 4px;
+}
+.fallback-mark {
+    font-weight: bold;
+    color: #d32f2f;
+}
 #msm-tide-note {
     margin-top: 6px;
 }

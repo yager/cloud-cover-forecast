@@ -133,6 +133,21 @@ const POINT = { name: '皇居', lat: 35.6852, lng: 139.7528 };
 const TIMEOUT_MS = 10000;
 const SLOW_MS = 3000;
 
+// 実行開始の時刻。各項目の開始・終了を「実行開始から何秒後か」で残すための基準
+let runOrigin = performance.now();
+
+function markRunStart() {
+    runOrigin = performance.now();
+}
+
+function elapsedSinceRunStart() {
+    return performance.now() - runOrigin;
+}
+
+function fmtOffset(ms) {
+    return ms === null || ms === undefined ? '—' : `+${(ms / 1000).toFixed(2)}秒`;
+}
+
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const OM_BASE = 'https://openmeteo.s3.amazonaws.com/data_spatial/jma_msm';
 const NOWC_BASE = 'https://www.jma.go.jp/bosai/jmatile/data/nowc';
@@ -493,6 +508,7 @@ function snippet(bytes, limit = 200) {
 function emptyResult(spec, attempt, url) {
     return {
         url, method: spec.kind === 'head' ? 'HEAD' : 'GET', startedAt: new Date(), attempt,
+        startOffset: null, endOffset: null,
         status: null, statusText: '', ttfb: null, total: null, sizeText: '—',
         headers: [], failure: null, check: null, reason: '', extra: [], state: 'ng', data: null
     };
@@ -508,6 +524,7 @@ async function measure(spec, dep, attempt) {
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
     const t0 = performance.now();
+    m.startOffset = t0 - runOrigin;
 
     try {
         const res = await fetch(url, { method: m.method, cache: 'no-store', signal: controller.signal });
@@ -559,6 +576,7 @@ async function measure(spec, dep, attempt) {
         m.errorName = error?.name ?? '';
     } finally {
         clearTimeout(timer);
+        if (m.total !== null) m.endOffset = m.startOffset + m.total;
     }
 
     if (m.failure) {
@@ -630,6 +648,7 @@ const summary = document.getElementById('summary');
 
 let runCount = 0;
 let runStartedAt = null;
+let runElapsed = null; // 実行開始から全項目が終わるまで（ms）。測定中は null
 let running = false;
 
 function el(tag, props = {}, ...children) {
@@ -680,6 +699,7 @@ function detailContent(row) {
         ]),
         ...section('測定', [
             ['時刻', `${fmtJst(m.startedAt, true)} JST`],
+            ['実行開始から', m.startOffset === null ? '—' : `${fmtOffset(m.startOffset)} 〜 ${fmtOffset(m.endOffset)}`],
             ['何回目', attemptText(m.attempt)]
         ])
     );
@@ -701,7 +721,8 @@ function updateSummary() {
     const done = rows.filter((r) => r.result);
     const count = (s) => done.filter((r) => r.result.state === s).length;
     const progress = done.length < rows.length ? ` · 測定中 ${done.length}/${rows.length}` : '';
-    summary.textContent = `#${runCount} · ${fmtJst(runStartedAt, true)} JST${progress}`
+    const total = runElapsed === null ? '' : ` · 全体 ${fmtSec(runElapsed)}`;
+    summary.textContent = `#${runCount} · ${fmtJst(runStartedAt, true)} JST${progress}${total}`
         + ` · OK ${count('ok')} · 遅い ${count('slow')} · NG ${count('ng')}`;
 }
 
@@ -732,6 +753,8 @@ async function runAll() {
     running = true;
     runCount += 1;
     runStartedAt = new Date();
+    runElapsed = null;
+    markRunStart();
     runButton.disabled = true;
     copyButton.disabled = true;
     const slots = newSlots();
@@ -745,6 +768,8 @@ async function runAll() {
         renderRow(row);
         updateSummary();
     }));
+    runElapsed = elapsedSinceRunStart();
+    updateSummary();
     running = false;
     runButton.disabled = false;
     copyButton.disabled = false;
@@ -753,6 +778,7 @@ async function runAll() {
 function buildReport() {
     const lines = [
         `API診断 #${runCount}  ${fmtJst(runStartedAt, true)} JST`,
+        `全体: ${runElapsed === null ? '測定中' : `${fmtSec(runElapsed)}（実行開始から全項目が終わるまで）`}`,
         `地点: ${POINT.name} (${POINT.lat}, ${POINT.lng})`,
         `UA: ${navigator.userAgent}`
     ];
@@ -773,7 +799,7 @@ function buildReport() {
         if (m.state !== 'ok' && m.headers.length) {
             lines.push(`  ヘッダ: ${m.headers.map(([k, v]) => `${k}=${v}`).join('; ')}`);
         }
-        lines.push(`  測定: ${fmtJst(m.startedAt, true)} JST・${attemptText(m.attempt)}`);
+        lines.push(`  測定: ${fmtJst(m.startedAt, true)} JST・実行開始から ${fmtOffset(m.startOffset)} 〜 ${fmtOffset(m.endOffset)}・${attemptText(m.attempt)}`);
     }
     return lines.join('\n');
 }

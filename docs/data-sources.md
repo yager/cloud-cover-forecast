@@ -7,6 +7,7 @@
 | 雲量の地図 | 気象庁MSM（Open-Meteo のオープンデータ） | `https://openmeteo.s3.amazonaws.com/data_spatial/jma_msm/` | 1日8回（3時間ごと） |
 | 1時間予測 | 気象庁MSM（Open-Meteo API） | `https://api.open-meteo.com/v1/forecast` | 同上 |
 | 2週間予測 | ECMWF AIFS（Open-Meteo API） | 同上 | 1日3〜4回 |
+| 1時間・2週間予測の予備 | 同上（Open-Meteo のオープンデータ） | `https://openmeteo.s3.amazonaws.com/data/{jma_msm,ecmwf_aifs025_single}/{変数}/chunk_{n}.om`（API が3秒たっても返らないときだけ） | 同上 |
 | 週間予報 | 気象庁 | `https://www.jma.go.jp/bosai/forecast/data/forecast/{府県コード}.json` | 1日3回（5時・11時・17時） |
 | 予報区の特定 | 気象庁 / 国土地理院 | `bosai/common/const/area.json`、`mreversegeocoder.gsi.go.jp` | — |
 | 天気アイコン | 気象庁 | `https://www.jma.go.jp/bosai/forecast/img/{ファイル名}.svg` | — |
@@ -64,6 +65,7 @@
 - モデルの計算値は「予測」、気象庁の発表は「予報」と呼び分ける。
 - 格子は最近傍で塗り、補間・平滑化をしない。3層を合成した独自の指標（「星が見えるか」など）は作らない。
 - 注意書きはフッターに1か所、各表の「ⓘ」に短く。
+- API が応答しない間だけ、予備として S3 のオープンデータから**補正なしの最近傍の格子点の値**を表示する（`js/s3-forecast.js`）。標高の補正は、標準的な気温減率でも「高度補正」にあたり、独自の予報とみなされる可能性があるため、しない。1時間予測の上に「Open-Meteo の API が応答しないため」「S3 の公開データから直接読んだ格子点の値」「標高の補正をしていない」を注意として出し、両方の見出しに赤い※を付ける。API の値が得られたら注意ごと置き換える。
 - 気温は Open-Meteo の API が地点の標高に合わせて補正した値を表示している。補正はデータ提供元が行っているもので、このサイト側では加工していない。何の値かを ⓘ に明記してある。生の格子値に戻す場合は `elevation=nan` を付ける。
 
 ## 検証の記録

@@ -3,6 +3,7 @@
 
 import { PinController, setupSearch, formatLatLng, renderPinNameLabel } from './pin.js';
 import { PlacesController } from './places.js';
+import { loadForecastWithFallback } from './forecast-source.js';
 import {
     loadPointForecast, loadJmaWeekly, trimSeriesBefore, weatherTelop,
     reverseGeocodeAddress, jstKey, formatDateLabel, formatHourLabel
@@ -824,7 +825,16 @@ function prepareForecastSection(sectionId) {
     const meta = section.querySelector('.forecast-meta');
     if (meta) meta.textContent = '';
     if (sectionId === 'forecast-msm') setMsmTideNote(null);
+    // 週間予報（気象庁）の失敗や読み込みでは、API の値の注意を消さない
+    if (sectionId !== 'forecast-jma') setFallbackActive(false);
     return section;
+}
+
+// 予備の取得先（S3）の値を出しているときの注意。1時間予測の上の文章と、両方の見出しの赤い※。
+// API の値に置き換わったとき・地点が変わったときは消す
+function setFallbackActive(active) {
+    document.getElementById('forecast-fallback-notice').hidden = !active;
+    for (const mark of document.querySelectorAll('.fallback-flag')) mark.hidden = !active;
 }
 
 function showForecastLoading(sectionId) {
@@ -913,36 +923,61 @@ async function updateForecast(pin) {
     showForecastLoading('forecast-msm');
     showForecastLoading('forecast-aifs');
 
-    Promise.all([loadPointForecast(pin.lat, pin.lng), cloudBaseTime]).then(async ([forecast, baseTime]) => {
-        if (token !== forecastToken) return;
-        markDataFetched();
-        // 1時間予測は、雲量地図と同じ計算の範囲（基準時刻以降）だけを出す。
-        // それより前の時刻は前の計算の値で、地図では選べないため
-        const msmSeries = trimSeriesBefore(forecast.msm, baseTime);
-        let tideRow = null;
+    // 値は API を主とし、3秒たっても返らなければ S3 からも読む。API が後から返れば、そちらで全て置き換える。
+    // 表示は非同期（雲量の基準時刻・潮位を待つ）なので、後から始めた表示が優先され、古い表示は捨てる
+    let renderSeq = 0;
+    const showForecast = async (forecast, source) => {
+        const seq = ++renderSeq;
+        const stale = () => token !== forecastToken || seq !== renderSeq;
         try {
-            tideRow = await loadTideRow(pin.lat, pin.lng, msmSeries.times);
-        } catch (error) {
-            console.error('Failed to load tide row:', error);
-        }
-        if (token !== forecastToken) return;
+            const baseTime = await cloudBaseTime;
+            if (stale()) return;
+            markDataFetched();
+            // 1時間予測は、雲量地図と同じ計算の範囲（基準時刻以降）だけを出す。
+            // それより前の時刻は前の計算の値で、地図では選べないため
+            const msmSeries = trimSeriesBefore(forecast.msm, baseTime);
+            let tideRow = null;
+            try {
+                tideRow = await loadTideRow(pin.lat, pin.lng, msmSeries.times);
+            } catch (error) {
+                console.error('Failed to load tide row:', error);
+            }
+            if (stale()) return;
 
-        const sections = [
-            ['forecast-msm', msmSeries, 1, tideRow],
-            ['forecast-aifs', forecast.aifs, 6, null]
-        ];
-        for (const [id, series, stepHours, tide] of sections) {
-            const section = document.getElementById(id);
-            section.hidden = false;
-            const container = section.querySelector('.table-container');
-            container.innerHTML = '<table></table>';
-            renderTable(container.firstChild, forecastRows(series, stepHours, pin, tide), series.times);
-            markPastCells();
-            scrollToCurrentColumn(container);
+            const sections = [
+                ['forecast-msm', msmSeries, 1, tideRow],
+                ['forecast-aifs', forecast.aifs, 6, null]
+            ];
+            for (const [id, series, stepHours, tide] of sections) {
+                const section = document.getElementById(id);
+                section.hidden = false;
+                const container = section.querySelector('.table-container');
+                container.innerHTML = '<table></table>';
+                renderTable(container.firstChild, forecastRows(series, stepHours, pin, tide), series.times);
+                markPastCells();
+                scrollToCurrentColumn(container);
+            }
+            // API の値なら注意は全て消え、S3 の値なら出る
+            setFallbackActive(source === 'fallback');
+            setMsmTideNote(tideRow ? tideRow.footnoteHtml : null);
+            highlightForecastTime(document.getElementById('time-select').value);
+            markSelectableTimes();
+        } catch (error) {
+            if (stale()) return;
+            console.error('Failed to show point forecast:', error);
+            showForecastError('forecast-msm', '予測値を表示できませんでした。');
+            showForecastError('forecast-aifs', '予測値を表示できませんでした。');
         }
-        setMsmTideNote(tideRow ? tideRow.footnoteHtml : null);
-        highlightForecastTime(document.getElementById('time-select').value);
-        markSelectableTimes();
+    };
+
+    loadForecastWithFallback({
+        loadPrimary: () => loadPointForecast(pin.lat, pin.lng),
+        loadFallback: async () => {
+            const { loadPointForecastFromS3 } = await import('./s3-forecast.js');
+            return loadPointForecastFromS3(pin.lat, pin.lng);
+        },
+        onResult: showForecast,
+        isCurrent: () => token === forecastToken
     }).catch((error) => {
         if (token !== forecastToken) return;
         console.error('Failed to load point forecast:', error);
