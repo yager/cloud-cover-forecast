@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>API診断 - 雲量予測</title>
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <style>
+        :root {
+            color-scheme: light dark;
+            --line: color-mix(in srgb, currentColor 16%, transparent);
+            --tint: color-mix(in srgb, currentColor 5%, transparent);
+            --muted: color-mix(in srgb, currentColor 60%, transparent);
+            --ok: #2e9e5b;
+            --slow: #e0a800;
+            --ng: #d64545;
+            --pending: color-mix(in srgb, currentColor 28%, transparent);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font: 15px/1.55 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        }
+        main { max-width: 960px; margin: 0 auto; padding: 16px; }
+        h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+        .lead, .note { color: var(--muted); font-size: .85rem; margin: 0 0 .9rem; }
+        .note { margin: .9rem 0 0; }
+        .bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-bottom: .75rem; }
+        button.action {
+            font: inherit;
+            min-height: 2.5rem;
+            padding: 0 1rem;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+        }
+        button.action:disabled { opacity: .5; cursor: default; }
+        #summary { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+        th {
+            text-align: left;
+            font-weight: 500;
+            font-size: .75rem;
+            color: var(--muted);
+            padding: .3rem .4rem;
+            border-bottom: 1px solid var(--line);
+        }
+        td { padding: .55rem .4rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+        .c-dot { width: 2.4rem; text-align: center; }
+        .c-name { width: 9.5em; overflow-wrap: anywhere; }
+        .c-btn { width: 2.6rem; padding: 0; }
+        .c-url {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+            color: var(--muted);
+        }
+        @media (max-width: 480px) { .c-name { width: 7.2em; font-size: .9rem; } }
+        tr.item { cursor: pointer; }
+
+        .dot { display: inline-block; width: .85em; height: .85em; border-radius: 50%; vertical-align: middle; }
+        .dot.ok { background: var(--ok); }
+        .dot.slow { background: var(--slow); }
+        .dot.ng { background: var(--ng); }
+        .dot.pending { background: var(--pending); }
+
+        .toggle {
+            width: 100%;
+            height: 2.6rem;
+            border: 0;
+            background: none;
+            color: inherit;
+            cursor: pointer;
+        }
+        .toggle::before {
+            content: "";
+            display: inline-block;
+            width: .5em;
+            height: .5em;
+            border: solid currentColor;
+            border-width: 0 2px 2px 0;
+            transform: translateY(-.15em) rotate(-45deg);
+        }
+        .toggle[aria-expanded="true"]::before { transform: translateY(-.25em) rotate(45deg); }
+
+        tr.detail > td { background: var(--tint); padding: .6rem .75rem .9rem; }
+        .detail h3 { margin: .7rem 0 .2rem; font-size: .72rem; font-weight: 500; color: var(--muted); letter-spacing: .04em; }
+        .detail h3:first-child { margin-top: 0; }
+        .detail dl { display: grid; grid-template-columns: 8.5em 1fr; gap: .15rem .75rem; margin: 0; font-size: .85rem; }
+        .detail dt { color: var(--muted); }
+        .detail dd { margin: 0; overflow-wrap: anywhere; }
+        .detail code, .detail pre { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
+        .detail pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .detail p { margin: 0; font-size: .85rem; }
+        .muted { color: var(--muted); }
+        @media (max-width: 480px) { .detail dl { grid-template-columns: 6.6em 1fr; } }
+    </style>
+</head>
+<body>
+<main>
+    <h1>API診断</h1>
+    <p class="lead">
+        この端末・この回線から、雲量予測が使っているAPIへ今すぐ1回ずつリクエストして結果を表示します。
+        測定地点は皇居（35.6852, 139.7528）に固定です。雲量・風の地図データ（約800KB）を含め、1回の測定でおよそ1MBの通信が発生します。
+    </p>
+    <div class="bar">
+        <button type="button" class="action" id="run">再測定</button>
+        <button type="button" class="action" id="copy">結果をコピー</button>
+        <span id="summary" aria-live="polite"></span>
+    </div>
+    <table>
+        <thead>
+            <tr><th class="c-dot">結果</th><th class="c-name">項目</th><th>URL</th><th class="c-btn"></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+    </table>
+    <p class="note">
+        初回は新規接続を含みます（同じホストの2件目以降は先に開いた接続を共有することがあります）。
+        再測定や再読み込みはブラウザが保持している接続を再利用することがあり、新規接続のハングは初回でしか見えないことがあります。
+    </p>
+</main>
+
+<script type="module">
+// ==== logic:start
+const POINT = { name: '皇居', lat: 35.6852, lng: 139.7528 };
+
+const TIMEOUT_MS = 10000;
+const SLOW_MS = 3000;
+
+const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
+const OM_BASE = 'https://openmeteo.s3.amazonaws.com/data_spatial/jma_msm';
+const NOWC_BASE = 'https://www.jma.go.jp/bosai/jmatile/data/nowc';
+const JMA_FORECAST_URL = 'https://www.jma.go.jp/bosai/forecast/data/forecast/130000.json';
+const JMA_AREA_URL = 'https://www.jma.go.jp/bosai/common/const/area.json';
+const GSI_SEARCH_URL = 'https://msearch.gsi.go.jp/address-search/AddressSearch';
+const GSI_REVERSE_URL = 'https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress';
+const GSI_TILE_URL = 'https://cyberjapandata.gsi.go.jp/xyz/blank';
+
+// js/weather.js の loadPointForecast と同じクエリ（応答サイズをアプリと揃える）
+const OM_MODELS = { jma_msm: 'MSM', ecmwf_aifs025_single: 'AIFS' };
+const OM_HOURLY = [
+    'temperature_2m', 'relative_humidity_2m', 'precipitation',
+    'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high',
+    'wind_speed_10m', 'wind_direction_10m', 'pressure_msl'
+];
+
+const STATE_LABEL = { ok: 'OK', slow: '遅い', ng: 'NG', pending: '測定中' };
+const NEEDS_LABEL = { omIndex: 'latest.json', nowcObserved: '降水 時刻一覧' };
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function fmtSec(ms) {
+    return `${(ms / 1000).toFixed(2)}秒`;
+}
+
+function fmtBytes(n) {
+    if (n === null || n === undefined) return '—';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+    return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+const JST_PARTS = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hourCycle: 'h23'
+});
+
+function fmtJst(date, withSeconds = false) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
+    const p = Object.fromEntries(JST_PARTS.formatToParts(date).map((x) => [x.type, x.value]));
+    const base = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+    return withSeconds ? `${base}:${p.second}` : base;
+}
+
+function ageText(date) {
+    const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+    const abs = Math.abs(minutes);
+    const span = abs < 120 ? `${abs}分` : `${(abs / 60).toFixed(1)}時間`;
+    return minutes >= 0 ? `${span}前` : `${span}後`;
+}
+
+function hostPath(url) {
+    const u = new URL(url);
+    return u.host + u.pathname;
+}
+
+function headerValue(m, name) {
+    const found = m.headers.find(([k]) => k === name);
+    return found ? found[1] : null;
+}
+
+// "20260925013500"（UTC）→ Date。js/nowcast.js と同じ
+function parseStamp(stamp) {
+    return new Date(`${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}`
+        + `T${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)}Z`);
+}
+
+function tileXY(lat, lng, z) {
+    const n = 2 ** z;
+    const sin = Math.sin(lat * Math.PI / 180);
+    return {
+        x: Math.floor((lng + 180) / 360 * n),
+        y: Math.floor((0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * n)
+    };
+}
+
+// js/msm.js の omUrl と同じ
+function omUrl(referenceTime, validTime) {
+    const r = new Date(referenceTime);
+    const v = new Date(validTime);
+    const run = `${r.getUTCFullYear()}/${pad2(r.getUTCMonth() + 1)}/${pad2(r.getUTCDate())}/${pad2(r.getUTCHours())}${pad2(r.getUTCMinutes())}Z`;
+    const file = `${v.getUTCFullYear()}-${pad2(v.getUTCMonth() + 1)}-${pad2(v.getUTCDate())}T${pad2(v.getUTCHours())}${pad2(v.getUTCMinutes())}`;
+    return `${OM_BASE}/${run}/${file}.om`;
+}
+
+function newestEntry(list, element) {
+    let best = null;
+    for (const entry of list) {
+        if (!entry || !Array.isArray(entry.elements) || !entry.elements.includes(element)) continue;
+        if (!best || entry.validtime > best.validtime) best = entry;
+    }
+    return best;
+}
+
+const NOWC_TILE_ZOOM = 8;
+const GSI_TILE_ZOOM = 10;
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+// 項目ごとの定義。
+//   url: リクエストURL（needs があれば前提の結果を受け取る）
+//   kind: json / binary / head（head は本文を取らない）
+//   check: 中身の検証。{ ok, text } を返す
+//   extra: 固有情報。[ラベル, 値] の配列
+//   needs / provides: 前提となる別項目の結果の受け渡し
+const PROBES = [
+    {
+        id: 'forecast',
+        name: '1時間・2週間予測',
+        urlLabel: 'api.open-meteo.com/v1/forecast',
+        url: () => `${OPEN_METEO_URL}?${new URLSearchParams({
+            latitude: POINT.lat.toFixed(5),
+            longitude: POINT.lng.toFixed(5),
+            models: Object.keys(OM_MODELS).join(','),
+            hourly: OM_HOURLY.join(','),
+            timezone: 'Asia/Tokyo',
+            wind_speed_unit: 'ms',
+            forecast_days: '16'
+        })}`,
+        kind: 'json',
+        check(data) {
+            if (data && data.error) {
+                return { ok: false, text: `APIがエラーを返却: ${data.reason ?? '（理由なし）'}` };
+            }
+            const times = data?.hourly?.time;
+            if (!Array.isArray(times) || times.length === 0) {
+                return { ok: false, text: 'hourly.time が空、または存在しない' };
+            }
+            const counts = Object.entries(OM_MODELS).map(([model, label]) => {
+                const values = data.hourly[`pressure_msl_${model}`];
+                return [label, Array.isArray(values) ? values.filter((v) => v !== null).length : 0];
+            });
+            const text = `pressure_msl に値のある時刻: ${counts.map(([label, n]) => `${label} ${n}件`).join('・')}（全${times.length}時刻中）`;
+            const empty = counts.filter(([, n]) => n === 0).map(([label]) => label);
+            return empty.length
+                ? { ok: false, text: `${empty.join('・')} の pressure_msl が全て null（${text}）` }
+                : { ok: true, text };
+        },
+        extra(data, m) {
+            if (typeof data.generationtime_ms !== 'number') return [];
+            const rows = [['サーバー計算時間', `${data.generationtime_ms.toFixed(1)} ms`]];
+            if (m.total !== null) rows.push(['通信・待ち（合計−計算）', fmtSec(Math.max(0, m.total - data.generationtime_ms))]);
+            return rows;
+        }
+    },
+    {
+        id: 'om-index',
+        name: '雲量・風 索引',
+        urlLabel: 'openmeteo.s3.amazonaws.com/…/latest.json',
+        url: () => `${OM_BASE}/latest.json`,
+        kind: 'json',
+        provides: 'omIndex',
+        check(data) {
+            const ok = data && !Number.isNaN(new Date(data.reference_time).getTime())
+                && Array.isArray(data.valid_times) && data.valid_times.length > 0;
+            return ok
+                ? { ok: true, text: `reference_time あり・valid_times ${data.valid_times.length}件` }
+                : { ok: false, text: 'reference_time / valid_times が想定の形ではない' };
+        },
+        extra(data) {
+            const reference = new Date(data.reference_time);
+            const times = data.valid_times.map((t) => new Date(t));
+            return [
+                ['基準時刻（最新ラン）', `${fmtJst(reference)} JST（${ageText(reference)}）`],
+                ['予報時刻', `${fmtJst(times[0])} 〜 ${fmtJst(times[times.length - 1])} JST（${times.length}コマ）`]
+            ];
+        }
+    },
+    {
+        id: 'om-data',
+        name: '雲量・風 データ',
+        urlLabel: 'openmeteo.s3.amazonaws.com/…/*.om',
+        needs: 'omIndex',
+        url: (index) => omUrl(index.reference_time, index.valid_times[0]),
+        kind: 'binary',
+        timeoutMs: 20000,
+        slowMs: 6000,
+        check(bytes) {
+            const text = `サイズ ${fmtBytes(bytes.length)}（1コマ約800KBが目安）`;
+            return { ok: bytes.length >= 100 * 1024, text };
+        },
+        extra(bytes, m, index) {
+            return [['対象', `基準 ${fmtJst(new Date(index.reference_time))} / 予報時刻 ${fmtJst(new Date(index.valid_times[0]))} JST`]];
+        }
+    },
+    {
+        id: 'nowc-rain',
+        name: '降水 時刻一覧',
+        urlLabel: 'www.jma.go.jp/…/targetTimes_N1.json',
+        url: () => `${NOWC_BASE}/targetTimes_N1.json`,
+        kind: 'json',
+        provides: 'nowcObserved',
+        provide: (list) => newestEntry(list, 'hrpns'),
+        check(list) {
+            if (!Array.isArray(list) || list.length === 0) return { ok: false, text: '時刻一覧が空、または配列ではない' };
+            const newest = newestEntry(list, 'hrpns');
+            return newest
+                ? { ok: true, text: `${list.length}件・hrpns を持つ最新コマ ${newest.validtime}` }
+                : { ok: false, text: `${list.length}件あるが hrpns を持つコマがない` };
+        },
+        extra(list) {
+            const newest = newestEntry(list, 'hrpns');
+            const valid = parseStamp(newest.validtime);
+            return [
+                ['最新の実況時刻', `${fmtJst(valid)} JST（${ageText(valid)}）`],
+                ['基準時刻', `${fmtJst(parseStamp(newest.basetime))} JST`]
+            ];
+        }
+    },
+    {
+        id: 'nowc-thunder',
+        name: '雷 時刻一覧',
+        urlLabel: 'www.jma.go.jp/…/targetTimes_N3.json',
+        url: () => `${NOWC_BASE}/targetTimes_N3.json`,
+        kind: 'json',
+        check(list) {
+            if (!Array.isArray(list) || list.length === 0) return { ok: false, text: '時刻一覧が空、または配列ではない' };
+            const area = list.filter((e) => e?.elements?.includes('thns')).length;
+            const strikes = list.filter((e) => e?.elements?.includes('liden')).length;
+            return { ok: true, text: `${list.length}件（面 thns ${area}件・落雷点 liden ${strikes}件）` };
+        },
+        extra(list) {
+            const newest = list.reduce((a, b) => (b.validtime > a.validtime ? b : a));
+            const valid = parseStamp(newest.validtime);
+            return [['最新の時刻', `${fmtJst(valid)} JST（${ageText(valid)}）`]];
+        }
+    },
+    {
+        id: 'nowc-tile',
+        name: '降水 タイル',
+        urlLabel: 'www.jma.go.jp/…/hrpns/8/*/*.png',
+        needs: 'nowcObserved',
+        url: (entry) => {
+            const { x, y } = tileXY(POINT.lat, POINT.lng, NOWC_TILE_ZOOM);
+            return `${NOWC_BASE}/${entry.basetime}/none/${entry.validtime}/surf/hrpns/${NOWC_TILE_ZOOM}/${x}/${y}.png`;
+        },
+        kind: 'binary',
+        check(bytes) {
+            const isPng = PNG_SIGNATURE.every((b, i) => bytes[i] === b);
+            // 降水が無い区画も、データの無いズームも、HTTP 200 の小さな透明PNGで返る
+            const note = bytes.length < 400 ? '（透明タイル: 降水なし、またはデータなし）' : '';
+            return isPng
+                ? { ok: true, text: `PNG署名OK・${fmtBytes(bytes.length)}${note}` }
+                : { ok: false, text: `PNGではない（先頭 ${bytes.length} バイト中）` };
+        },
+        extra(bytes, m, entry) {
+            const { x, y } = tileXY(POINT.lat, POINT.lng, NOWC_TILE_ZOOM);
+            return [['タイル', `z${NOWC_TILE_ZOOM}/${x}/${y}・${fmtJst(parseStamp(entry.validtime))} JST`]];
+        }
+    },
+    {
+        id: 'jma-weekly',
+        name: '週間予報',
+        urlLabel: 'www.jma.go.jp/…/forecast/130000.json',
+        url: () => JMA_FORECAST_URL,
+        kind: 'json',
+        check(data) {
+            const series = Array.isArray(data) ? data[1]?.timeSeries : null;
+            return Array.isArray(series) && series.length > 0
+                ? { ok: true, text: `配列${data.length}件・週間の timeSeries ${series.length}本` }
+                : { ok: false, text: '週間予報（2件目）の timeSeries が見つからない' };
+        },
+        extra(data) {
+            const weekly = data[1];
+            return [['発表', `${weekly.publishingOffice ?? '—'} ${fmtJst(new Date(weekly.reportDatetime))} JST`]];
+        }
+    },
+    {
+        id: 'jma-area',
+        name: '地域一覧',
+        urlLabel: 'www.jma.go.jp/…/area.json',
+        url: () => JMA_AREA_URL,
+        kind: 'json',
+        check(data) {
+            const class20s = data?.class20s ? Object.keys(data.class20s).length : 0;
+            const offices = data?.offices ? Object.keys(data.offices).length : 0;
+            return { ok: class20s >= 500, text: `class20s ${class20s}件・offices ${offices}件` };
+        }
+    },
+    {
+        id: 'gsi-search',
+        name: '住所検索',
+        urlLabel: 'msearch.gsi.go.jp/address-search/AddressSearch',
+        url: () => `${GSI_SEARCH_URL}?q=${encodeURIComponent('東京都千代田区')}`,
+        kind: 'json',
+        check(data) {
+            if (!Array.isArray(data) || data.length === 0) return { ok: false, text: '検索結果が空、または配列ではない' };
+            const coords = data[0]?.geometry?.coordinates;
+            const title = String(data[0]?.properties?.title ?? '');
+            return Array.isArray(coords) && coords.length >= 2
+                ? { ok: true, text: `${data.length}件・先頭「${title}」` }
+                : { ok: false, text: '先頭の結果に座標がない' };
+        }
+    },
+    {
+        id: 'gsi-reverse',
+        name: '逆ジオコーダ',
+        urlLabel: 'mreversegeocoder.gsi.go.jp/…/LonLatToAddress',
+        url: () => `${GSI_REVERSE_URL}?lat=${POINT.lat.toFixed(5)}&lon=${POINT.lng.toFixed(5)}`,
+        kind: 'json',
+        check(data) {
+            const code = data?.results?.muniCd;
+            return code
+                ? { ok: true, text: `muniCd ${code}・${data.results.lv01Nm ?? ''}` }
+                : { ok: false, text: 'results.muniCd がない' };
+        }
+    },
+    {
+        id: 'gsi-tile',
+        name: '地図タイル',
+        urlLabel: 'cyberjapandata.gsi.go.jp/xyz/blank/…',
+        url: () => {
+            const { x, y } = tileXY(POINT.lat, POINT.lng, GSI_TILE_ZOOM);
+            return `${GSI_TILE_URL}/${GSI_TILE_ZOOM}/${x}/${y}.png`;
+        },
+        kind: 'head',
+        check(data, m) {
+            const type = headerValue(m, 'content-type') ?? '（なし）';
+            return { ok: type.includes('image/png'), text: `Content-Type ${type}` };
+        },
+        extra() {
+            const { x, y } = tileXY(POINT.lat, POINT.lng, GSI_TILE_ZOOM);
+            return [['タイル', `白地図 z${GSI_TILE_ZOOM}/${x}/${y}（Service Worker を通さないよう HEAD で確認）`]];
+        }
+    }
+];
+
+async function readBody(res, progress) {
+    if (!res.body) {
+        const buffer = new Uint8Array(await res.arrayBuffer());
+        progress.bytes = buffer.length;
+        return buffer;
+    }
+    const reader = res.body.getReader();
+    const chunks = [];
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        progress.bytes += value.length;
+    }
+    const out = new Uint8Array(progress.bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+    }
+    return out;
+}
+
+function snippet(bytes, limit = 200) {
+    const text = new TextDecoder().decode(bytes.subarray(0, limit * 3)).replace(/\s+/g, ' ').trim();
+    return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function emptyResult(spec, attempt, url) {
+    return {
+        url, method: spec.kind === 'head' ? 'HEAD' : 'GET', startedAt: new Date(), attempt,
+        status: null, statusText: '', ttfb: null, total: null, sizeText: '—',
+        headers: [], failure: null, check: null, reason: '', extra: [], state: 'ng', data: null
+    };
+}
+
+async function measure(spec, dep, attempt) {
+    const url = spec.url(dep);
+    const timeoutMs = spec.timeoutMs ?? TIMEOUT_MS;
+    const slowMs = spec.slowMs ?? SLOW_MS;
+    const m = emptyResult(spec, attempt, url);
+    const progress = { bytes: 0 };
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
+    const t0 = performance.now();
+
+    try {
+        const res = await fetch(url, { method: m.method, cache: 'no-store', signal: controller.signal });
+        m.ttfb = performance.now() - t0;
+        m.status = res.status;
+        m.statusText = res.statusText;
+        res.headers.forEach((value, key) => m.headers.push([key, value]));
+
+        const body = spec.kind === 'head' ? new Uint8Array(0) : await readBody(res, progress);
+        m.total = performance.now() - t0;
+        if (spec.kind === 'head') {
+            const length = Number(headerValue(m, 'content-length'));
+            m.sizeText = length ? `${fmtBytes(length)}（Content-Length。HEADのため本文は未取得）` : '—（Content-Length なし）';
+        } else {
+            m.sizeText = `${fmtBytes(body.length)}（展開後）`;
+        }
+
+        if (!res.ok) {
+            m.failure = `HTTP ${res.status}`;
+            m.check = { ok: false, text: `応答本文: ${snippet(body) || '（空）'}` };
+        } else if (spec.kind === 'json') {
+            try {
+                m.data = JSON.parse(new TextDecoder().decode(body));
+            } catch {
+                m.failure = 'JSON不正';
+                m.check = { ok: false, text: `本文がJSONとして読めない（先頭: ${snippet(body, 80) || '空'}）` };
+            }
+        } else {
+            m.data = body;
+        }
+
+        if (!m.failure) {
+            m.check = spec.check(m.data, m);
+            if (!m.check.ok) m.failure = '中身が不正';
+        }
+    } catch (error) {
+        m.total = performance.now() - t0;
+        m.sizeText = progress.bytes > 0 ? `${fmtBytes(progress.bytes)}（受信途中）` : '—';
+        const limit = `${timeoutMs / 1000}秒`;
+        if (timedOut) {
+            m.failure = m.ttfb === null
+                ? `タイムアウト（${limit}・応答なし）`
+                : `タイムアウト（${limit}・本文の途中で停止）`;
+        } else if (m.ttfb !== null) {
+            m.failure = '本文の受信中に切断';
+        } else {
+            m.failure = `通信エラー（${fmtSec(m.total)}後に失敗。DNS・接続・TLS・CORS のいずれか）`;
+        }
+        m.errorName = error?.name ?? '';
+    } finally {
+        clearTimeout(timer);
+    }
+
+    if (m.failure) {
+        m.state = 'ng';
+        m.reason = `${m.failure} → NG`;
+    } else if (m.total >= slowMs) {
+        m.state = 'slow';
+        m.reason = `合計 ${fmtSec(m.total)} ≥ ${slowMs / 1000}秒 → 遅い`;
+    } else {
+        m.state = 'ok';
+        m.reason = `合計 ${fmtSec(m.total)} < ${slowMs / 1000}秒 → OK`;
+    }
+
+    if (!m.failure && spec.extra) {
+        try {
+            m.extra = spec.extra(m.data, m, dep);
+        } catch {
+            m.extra = [];
+        }
+    }
+    return m;
+}
+
+function deferred() {
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+    return { promise, resolve };
+}
+
+async function runProbe(spec, slots, attempt) {
+    let dep = null;
+    if (spec.needs) {
+        dep = await slots.get(spec.needs).promise;
+        if (!dep) {
+            const m = emptyResult(spec, attempt, null);
+            m.failure = `前提の取得に失敗（${NEEDS_LABEL[spec.needs]}）`;
+            m.reason = `${m.failure} → NG`;
+            return m;
+        }
+    }
+    let provided = null;
+    try {
+        const m = await measure(spec, dep, attempt);
+        if (m.state !== 'ng') provided = spec.provide ? spec.provide(m.data) : m.data;
+        m.data = null;
+        return m;
+    } finally {
+        if (spec.provides) slots.get(spec.provides).resolve(provided ?? null);
+    }
+}
+
+function newSlots() {
+    const slots = new Map();
+    for (const spec of PROBES) {
+        if (spec.provides) slots.set(spec.provides, deferred());
+    }
+    return slots;
+}
+
+function attemptText(attempt) {
+    return attempt === 1 ? '1回目（新規接続を含むことがある）' : `${attempt}回目（接続を再利用することがある）`;
+}
+// ==== logic:end
+
+const rowsBody = document.getElementById('rows');
+const runButton = document.getElementById('run');
+const copyButton = document.getElementById('copy');
+const summary = document.getElementById('summary');
+
+let runCount = 0;
+let runStartedAt = null;
+let running = false;
+
+function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+        if (key === 'class') node.className = value;
+        else if (key === 'text') node.textContent = value;
+        else node.setAttribute(key, value);
+    }
+    node.append(...children);
+    return node;
+}
+
+function section(title, pairs) {
+    const dl = el('dl');
+    for (const [label, value] of pairs) dl.append(el('dt', { text: label }), el('dd', {}, value));
+    return [el('h3', { text: title }), dl];
+}
+
+function detailContent(row) {
+    const m = row.result;
+    const box = el('div');
+    if (!m) {
+        box.append(el('p', { class: 'muted', text: '測定中…' }));
+        return box;
+    }
+    box.append(
+        ...section('判定', [
+            ['失敗の種類', m.failure ?? 'なし'],
+            ['判定理由', m.reason],
+            ['中身の検証', m.check ? m.check.text : '—']
+        ]),
+        ...section('応答', [
+            ['HTTPステータス', m.status === null ? '—' : `${m.status} ${m.statusText}`.trim()],
+            ['初バイト / 合計', `${m.ttfb === null ? '—' : fmtSec(m.ttfb)} / ${m.total === null ? '—' : fmtSec(m.total)}`],
+            ['本文サイズ', m.sizeText]
+        ])
+    );
+    if (m.extra.length) box.append(...section('固有情報', m.extra));
+    box.append(el('h3', { text: 'レスポンスヘッダ（ブラウザが読める分）' }));
+    box.append(m.headers.length
+        ? el('pre', { text: m.headers.map(([k, v]) => `${k}: ${v}`).join('\n') })
+        : el('p', { class: 'muted', text: '読めるヘッダなし' }));
+    box.append(
+        ...section('要求', [
+            ['メソッド', m.method],
+            ['URL', m.url ? el('code', { text: m.url }) : '—（前提の取得に失敗したため未生成）']
+        ]),
+        ...section('測定', [
+            ['時刻', `${fmtJst(m.startedAt, true)} JST`],
+            ['何回目', attemptText(m.attempt)]
+        ])
+    );
+    return box;
+}
+
+function renderRow(row) {
+    const state = row.result ? row.result.state : 'pending';
+    row.dot.className = `dot ${state}`;
+    row.dot.setAttribute('aria-label', STATE_LABEL[state]);
+    row.dot.title = STATE_LABEL[state];
+    const url = row.result?.url;
+    row.urlCell.textContent = url ? hostPath(url) : row.spec.urlLabel;
+    row.urlCell.title = url ?? '';
+    row.detailCell.replaceChildren(detailContent(row));
+}
+
+function updateSummary() {
+    const done = rows.filter((r) => r.result);
+    const count = (s) => done.filter((r) => r.result.state === s).length;
+    const progress = done.length < rows.length ? ` · 測定中 ${done.length}/${rows.length}` : '';
+    summary.textContent = `#${runCount} · ${fmtJst(runStartedAt, true)} JST${progress}`
+        + ` · OK ${count('ok')} · 遅い ${count('slow')} · NG ${count('ng')}`;
+}
+
+const rows = PROBES.map((spec) => {
+    const dot = el('span', { class: 'dot pending', role: 'img' });
+    const urlCell = el('td', { class: 'c-url' });
+    const toggle = el('button', { type: 'button', class: 'toggle', 'aria-expanded': 'false', 'aria-label': '詳細' });
+    const detailCell = el('td', { colspan: '4' });
+    const detailRow = el('tr', { class: 'detail', hidden: '' }, detailCell);
+    const row = { spec, result: null, dot, urlCell, detailCell };
+    const itemRow = el('tr', { class: 'item' },
+        el('td', { class: 'c-dot' }, dot),
+        el('td', { class: 'c-name', text: spec.name }),
+        urlCell,
+        el('td', { class: 'c-btn' }, toggle));
+    itemRow.addEventListener('click', () => {
+        const open = detailRow.hidden;
+        detailRow.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+    });
+    rowsBody.append(itemRow, detailRow);
+    renderRow(row);
+    return row;
+});
+
+async function runAll() {
+    if (running) return;
+    running = true;
+    runCount += 1;
+    runStartedAt = new Date();
+    runButton.disabled = true;
+    copyButton.disabled = true;
+    const slots = newSlots();
+    for (const row of rows) {
+        row.result = null;
+        renderRow(row);
+    }
+    updateSummary();
+    await Promise.all(rows.map(async (row) => {
+        row.result = await runProbe(row.spec, slots, runCount);
+        renderRow(row);
+        updateSummary();
+    }));
+    running = false;
+    runButton.disabled = false;
+    copyButton.disabled = false;
+}
+
+function buildReport() {
+    const lines = [
+        `API診断 #${runCount}  ${fmtJst(runStartedAt, true)} JST`,
+        `地点: ${POINT.name} (${POINT.lat}, ${POINT.lng})`,
+        `UA: ${navigator.userAgent}`
+    ];
+    for (const { spec, result: m } of rows) {
+        if (!m) {
+            lines.push('', `[測定中] ${spec.name}`);
+            continue;
+        }
+        lines.push('', `[${STATE_LABEL[m.state]}] ${spec.name}`);
+        lines.push(`  URL: ${m.url ?? '（未生成）'}`);
+        lines.push(`  判定: ${m.reason}`);
+        lines.push(`  HTTP: ${m.status === null ? '—' : `${m.status} ${m.statusText}`.trim()}`
+            + ` / 初バイト ${m.ttfb === null ? '—' : fmtSec(m.ttfb)}`
+            + ` / 合計 ${m.total === null ? '—' : fmtSec(m.total)}`
+            + ` / 本文 ${m.sizeText}`);
+        if (m.check) lines.push(`  検証: ${m.check.text}`);
+        for (const [label, value] of m.extra) lines.push(`  ${label}: ${value}`);
+        if (m.state !== 'ok' && m.headers.length) {
+            lines.push(`  ヘッダ: ${m.headers.map(([k, v]) => `${k}=${v}`).join('; ')}`);
+        }
+        lines.push(`  測定: ${fmtJst(m.startedAt, true)} JST・${attemptText(m.attempt)}`);
+    }
+    return lines.join('\n');
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const area = el('textarea', { readonly: '' });
+        area.value = text;
+        area.style.cssText = 'position:fixed;opacity:0';
+        document.body.append(area);
+        area.select();
+        try {
+            return document.execCommand('copy');
+        } catch {
+            return false;
+        } finally {
+            area.remove();
+        }
+    }
+}
+
+runButton.addEventListener('click', runAll);
+copyButton.addEventListener('click', async () => {
+    const ok = await copyText(buildReport());
+    copyButton.textContent = ok ? 'コピーしました' : 'コピーできませんでした';
+    setTimeout(() => { copyButton.textContent = '結果をコピー'; }, 1600);
+});
+
+runAll();
+</script>
+</body>
+</html>

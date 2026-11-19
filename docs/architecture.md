@@ -18,6 +18,7 @@ GitHub Pages に置いた静的ファイルだけで動きます。サーバー�
 | `js/tide.js` | 気象庁潮位表（同梱）の最寄り地点・毎時値・局所±6h正規化・5段階色。1時間予測表の潮位行と脚注文言 |
 | `js/colors.js` | 地図の配色定数（凡例と描画で共有） |
 | `sw.js` | Service Worker（ルートに置く。PWA インストール用。本体はネットワーク優先） |
+| `status.html` | API 診断ページ（どこからもリンクしない・`noindex`）。いまの端末・回線から各 API へ1回ずつ送り、生死・時間・サイズ・中身の検証を表で出す。1ファイル完結で本体のコードには依存しない。`sw.js` の事前キャッシュには入れない（ファイルを足しても `VERSION` は上げなくてよい）。確認先 URL・クエリは `js/weather.js` / `js/msm.js` / `js/nowcast.js` と揃えてあるので、そちらを変えたらこちらも直す |
 | `docs/legend.svg` | README の表の色凡例（**手編集しない**。`scripts/generate_legend_svg.py` で作り直す） |
 | `data/tide/` | 気象庁潮位表の同梱データ（`stations.json`・年次 `{year}/{id}.txt`） |
 | `scripts/fetch_tide_data.py` | 上記潮位データを気象庁から取り直すスクリプト（年1回想定） |
